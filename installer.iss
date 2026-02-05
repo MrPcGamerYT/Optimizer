@@ -10,7 +10,7 @@ OutputDir=setup_output
 OutputBaseFilename=Optimizer-v1-Setup
 
 ; --- PUBLISHER DETAILS ---
-AppPublisher=YoyTuber
+AppPublisher=Mr.Pc Gamer
 AppPublisherURL=https://github.com/MrPcGamerYT/Optimizer
 VersionInfoCompany=Mr.Pc Gamer
 VersionInfoDescription=Optimizer System Setup
