@@ -14,7 +14,7 @@ OutputBaseFilename=Optimizer-v1-Setup
 PrivilegesRequired=admin
 
 ; --- ICON ---
-; Ensure "icon.ico" is in your GitHub repo root folder
+; Ensure "app_icon.ico" is in your GitHub repo root folder
 SetupIconFile=app_icon.ico 
 
 [Tasks]
