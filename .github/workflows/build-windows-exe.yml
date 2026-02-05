@@ -1,6 +1,5 @@
 name: Manual Build & Release Optimizer Installer
 
-# ONLY manual run
 on:
   workflow_dispatch:
 
@@ -9,53 +8,44 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1) Checkout the repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2) Setup MSBuild
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # 3) Setup NuGet
       - name: Setup NuGet
         uses: nuget/setup-nuget@v1
 
-      # 4) Restore NuGet packages
       - name: Restore NuGet packages
         run: nuget restore Optimizer.slnx
 
-      # 5) Build Release EXE
       - name: Build Release EXE
         run: msbuild Optimizer.slnx /p:Configuration=Release /p:Platform="Any CPU"
 
-      # 6) Copy Guna.UI2.dll to output
       - name: Copy Guna.UI2.dll
         shell: pwsh
         run: |
           Copy-Item -Path "Optimizer\packages\Guna.UI2.dll" -Destination "Optimizer\bin\Release" -Force
 
-      # 7) Install Inno Setup silently
       - name: Install Inno Setup
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:TEMP\is.exe"
           Start-Process "$env:TEMP\is.exe" -ArgumentList "/VERYSILENT /DIR=C:\InnoSetup" -Wait
 
-      # 8) Build the installer using Inno Setup
       - name: Build Installer
         shell: pwsh
         run: |
           $InnoPath = "C:\InnoSetup\ISCC.exe"
-          $ScriptPath = "InstallerScript.iss"  # You MUST have this file in repo
+          $ScriptPath = "InstallerScript.iss"
           & $InnoPath $ScriptPath
 
-      # 9) Create a GitHub Release manually
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0               # You can edit this manually before running
+          tag_name: v1.0.0
           name: "Optimizer Installer v1.0.0"
-          files: "**\Output\Setup.exe"   # Your Inno Setup output folder
+          files: "**\Output\Setup.exe"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
