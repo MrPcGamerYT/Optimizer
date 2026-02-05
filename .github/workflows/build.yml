@@ -1,0 +1,35 @@
+name: Build Optimizer EXE
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
+
+    - name: Restore NuGet Packages
+      run: nuget restore "Optimizer-TEST.csproj"
+
+    - name: Build Executable
+      run: |
+        msbuild "Optimizer-TEST.csproj" /p:Configuration=Release /p:Platform="AnyCPU" /p:OutputPath=./publish/
+
+    - name: Upload Executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: Optimizer-Build
+        path: ./publish/
