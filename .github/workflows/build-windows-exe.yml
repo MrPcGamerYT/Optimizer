@@ -2,34 +2,36 @@ name: Build & Release Optimizer EXE
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # allows manual run
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      # 1) Checkout repo
+      - uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+      # 2) Setup MSBuild
+      - uses: microsoft/setup-msbuild@v2
 
-      - name: Setup NuGet
-        uses: nuget/setup-nuget@v1
+      # 3) Setup NuGet
+      - uses: nuget/setup-nuget@v1
 
-      - name: Restore NuGet packages
-        run: nuget restore Optimizer.slnx
+      # 4) Restore NuGet packages
+      - run: nuget restore Optimizer.slnx
 
-      - name: Build EXE (Release)
-        run: msbuild Optimizer.slnx /p:Configuration=Release /p:Platform="Any CPU"
+      # 5) Build EXE
+      - run: msbuild Optimizer.slnx /p:Configuration=Release /p:Platform="Any CPU"
 
+      # 6) Create release ONLY if triggered by a tag
       - name: Create GitHub Release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            Optimizer/**/bin/Release/*.exe
+          files: Optimizer/**/bin/Release/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
