@@ -1,10 +1,9 @@
-name: Build Optimizer EXE
+name: Build & Release Optimizer EXE
 
 on:
   push:
-    branches:
-      - master
-      - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -27,8 +26,10 @@ jobs:
       - name: Build EXE (Release)
         run: msbuild Optimizer.slnx /p:Configuration=Release /p:Platform="Any CPU"
 
-      - name: Upload EXE
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Optimizer-EXE
-          path: Optimizer/**/bin/Release/*.exe
+          files: |
+            Optimizer/**/bin/Release/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
