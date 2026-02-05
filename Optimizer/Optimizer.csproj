@@ -126,6 +126,11 @@
       <Install>false</Install>
     </BootstrapperPackage>
   </ItemGroup>
+<ItemGroup>
+    <Content Include="app_icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
   <ItemGroup>
     <None Include="Resources\YouTube.png" />
   </ItemGroup>
