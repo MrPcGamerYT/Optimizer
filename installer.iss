@@ -7,7 +7,7 @@ UninstallDisplayIcon={app}\Optimizer.exe
 Compression=lzma
 SolidCompression=yes
 OutputDir=setup_output
-OutputBaseFilename=Optimizer-v1-Setup
+OutputBaseFilename=OptimizerSetup
 
 ; --- PUBLISHER DETAILS ---
 AppPublisher=Mr.Pc Gamer
