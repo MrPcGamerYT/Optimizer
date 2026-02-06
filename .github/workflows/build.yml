@@ -1,4 +1,4 @@
-name: Build and Release v1
+give me full code name: Build and Release v1
 
 on:
   push:
@@ -12,16 +12,10 @@ jobs:
       contents: write
 
     steps:
-    # -------------------------------
-    # 1️⃣ CHECKOUT
-    # -------------------------------
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # -------------------------------
-    # 2️⃣ BUILD
-    # -------------------------------
-    - name: Setup MSBuild
+    - name: Setup MSBuild & NuGet
       uses: microsoft/setup-msbuild@v2
 
     - name: Setup NuGet
@@ -34,17 +28,24 @@ jobs:
         nuget restore "$projectFile"
         msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # -------------------------------
-    # 3️⃣ BUILD INSTALLER
-    # -------------------------------
     - name: Build Installer (Inno Setup)
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # -------------------------------
-    # 4️⃣ CREATE NEW RELEASE (FIRST!)
-    # -------------------------------
+    # 🔥 DELETE ALL OLD RELEASES & TAGS
+    - name: Delete previous releases
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release list --limit 100 | ForEach-Object {
+          $tag = ($_ -split "`t")[0]
+          gh release delete $tag -y
+          git push origin :refs/tags/$tag
+        }
+
+    # 🚀 CREATE NEW LATEST RELEASE
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -54,24 +55,6 @@ jobs:
         prerelease: false
         files: setup_output/OptimizerSetup.exe
         make_latest: true
+        fail_on_unmatched_files: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    # -------------------------------
-    # 5️⃣ DELETE OLD RELEASES (KEEP LATEST ONLY)
-    # -------------------------------
-    - name: Delete old releases (keep latest)
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        $releases = gh release list --limit 50
-
-        # Skip newest release (first line)
-        $oldReleases = $releases | Select-Object -Skip 1
-
-        foreach ($r in $oldReleases) {
-          $tag = ($r -split "`t")[0]
-          Write-Host "Deleting old release: $tag"
-          gh release delete $tag -y --cleanup-tag
-        }
