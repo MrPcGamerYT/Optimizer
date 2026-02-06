@@ -12,9 +12,17 @@ jobs:
       contents: write
 
     steps:
-    # 🔹 Checkout
+    # 🔹 Checkout code
     - name: Checkout Code
       uses: actions/checkout@v4
+
+    # 🔹 Setup MSBuild
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    # 🔹 Setup NuGet
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
 
     # 🔹 Build Project
     - name: Build Project
@@ -29,6 +37,12 @@ jobs:
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
+
+    # 🔹 Debug Installer Output
+    - name: Debug Installer Output
+      shell: pwsh
+      run: |
+        Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
     # 🔹 Manual version
     - name: Set Manual Version
