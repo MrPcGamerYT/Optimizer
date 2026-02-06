@@ -43,8 +43,8 @@ jobs:
         prerelease: false
         files: setup_output/Optimizer-v1-Setup.exe
         make_latest: true
-        retries: 5
-        retry_delay: 3000
+        fail_on_unmatched_files: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
