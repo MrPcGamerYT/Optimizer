@@ -1820,11 +1820,11 @@ namespace Optimizer
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(34)))));
             this.ClientSize = new System.Drawing.Size(800, 403);
+            this.Controls.Add(this.Homepnl);
             this.Controls.Add(this.boostpnl);
             this.Controls.Add(this.Cleanerpnl);
             this.Controls.Add(this.settingspnl);
             this.Controls.Add(this.infopnl);
-            this.Controls.Add(this.Homepnl);
             this.Controls.Add(this.gamemodpnl);
             this.Controls.Add(this.guna2Panel1);
             this.Controls.Add(this.guna2Separator1);
