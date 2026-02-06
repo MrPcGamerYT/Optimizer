@@ -12,7 +12,7 @@ jobs:
       contents: write
 
     steps:
-    # 🔹 Checkout code
+    # 🔹 Checkout Code
     - name: Checkout Code
       uses: actions/checkout@v4
 
@@ -38,13 +38,14 @@ jobs:
         Write-Host "VERSION=$version" >> $env:GITHUB_ENV
         Write-Host "Calculated version: $version"
 
-    # 🔹 Update csproj with new version
+    # 🔹 Update csproj Version
     - name: Update csproj Version
       shell: pwsh
       run: |
         $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
-        (Get-Content $projectFile) -replace '<FileVersion>.*</FileVersion>', "<FileVersion>$env:VERSION</FileVersion>" `
-                                  -replace '<Version>.*</Version>', "<Version>$env:VERSION</Version>" | Set-Content $projectFile
+        (Get-Content $projectFile) `
+          -replace '<FileVersion>.*</FileVersion>', "<FileVersion>$env:VERSION</FileVersion>" `
+          -replace '<Version>.*</Version>', "<Version>$env:VERSION</Version>" | Set-Content $projectFile
         Write-Host "Updated csproj to version $env:VERSION"
 
     # 🔹 Build Project
@@ -61,11 +62,15 @@ jobs:
       with:
         path: installer.iss
 
-    # 🔹 Verify Installer Output
-    - name: Debug Installer Output
+    # 🔹 Find Installer Output
+    - name: Find Installer
+      id: find_installer
       shell: pwsh
       run: |
-        Get-ChildItem -Recurse -Filter OptimizerSetup.exe
+        $installer = Get-ChildItem -Recurse -Filter OptimizerSetup.exe | Select-Object -First 1
+        if (-not $installer) { throw "OptimizerSetup.exe not found!" }
+        Write-Host "INSTALLER_PATH=$($installer.FullName)" >> $env:GITHUB_ENV
+        Write-Host "Installer found at $($installer.FullName)"
 
     # 🔹 Generate update.json
     - name: Generate update.json
@@ -88,13 +93,13 @@ jobs:
         git commit -m "Auto update update.json to $env:VERSION" || echo "No changes to commit"
         git push
 
-    # 🚀 Create Release
+    # 🚀 Create GitHub Release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "v${{ env.VERSION }}"      # <-- Use version as tag
+        tag_name: "v${{ env.VERSION }}"                 # Use version as tag
         name: "Release v${{ env.VERSION }}"
-        files: "publish/OptimizerSetup.exe"  # <-- Make sure path matches your installer output
+        files: "${{ env.INSTALLER_PATH }}"             # Dynamic installer path
         make_latest: true
         fail_on_unmatched_files: true
       env:
