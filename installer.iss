@@ -14,7 +14,7 @@ AppPublisher=Mr.Pc Gamer
 AppPublisherURL=https://github.com/MrPcGamerYT/Optimizer
 VersionInfoCompany=Mr.Pc Gamer
 VersionInfoDescription=Optimizer System Setup
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion=1.1.0.0
 VersionInfoCopyright=© 2026 Mr.Pc Gamer. All Rights Reserved.
 
 ; --- ADMIN RIGHTS ---
