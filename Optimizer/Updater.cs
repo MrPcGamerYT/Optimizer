@@ -16,6 +16,7 @@ class Updater
         {
             using (WebClient wc = new WebClient())
             {
+                // Disable caching to always get the latest JSON
                 wc.CachePolicy = new System.Net.Cache.RequestCachePolicy(
                     System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
 
@@ -24,9 +25,11 @@ class Updater
                 string latestVersionText = ExtractJsonValue(json, "version");
                 string installerUrl = ExtractJsonValue(json, "url");
 
+                // Compare versions: if latest <= current, do nothing
                 if (CompareVersions(latestVersionText, Application.ProductVersion) <= 0)
                     return; // already up-to-date
 
+                // Ask user to update
                 if (MessageBox.Show(
                     $"New version {latestVersionText} is available.\n\nUpdate now?",
                     "Optimizer Update",
@@ -39,20 +42,22 @@ class Updater
                     "OptimizerSetup.exe"
                 );
 
+                // Remove previous installer if exists
                 if (File.Exists(installerPath))
                     File.Delete(installerPath);
 
+                // Download latest installer
                 wc.DownloadFile(installerUrl, installerPath);
 
-                // RUN INSTALLER ONLY
+                // Run installer only (never the main exe)
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = installerPath,
                     UseShellExecute = true,
-                    Verb = "runas"
+                    Verb = "runas" // prompt for admin
                 });
 
-                // FORCE EXIT CURRENT APP
+                // Force exit the current app immediately
                 Environment.Exit(0);
             }
         }
@@ -67,7 +72,7 @@ class Updater
         }
     }
 
-    // Extract JSON value without JSON libraries
+    // Extract a JSON value by key (no external library required)
     private static string ExtractJsonValue(string json, string key)
     {
         var match = Regex.Match(
@@ -82,8 +87,7 @@ class Updater
         return match.Groups[1].Value;
     }
 
-    // ✅ Manual version comparison for ANY numbers
-    // Returns: -1 = current > latest, 0 = equal, 1 = latest > current
+    // Compare semantic versions: returns 1 if latest > current, -1 if latest < current, 0 if equal
     private static int CompareVersions(string vLatest, string vCurrent)
     {
         int[] latestParts = ParseVersionParts(vLatest);
