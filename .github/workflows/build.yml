@@ -32,13 +32,13 @@ jobs:
         nuget restore "$projectFile"
         msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # 🔹 Build Installer
+    # 🔹 Build Installer (Inno Setup)
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 🔹 Debug Installer Output
+    # 🔹 Debug installer output
     - name: Debug Installer Output
       shell: pwsh
       run: |
@@ -87,24 +87,16 @@ jobs:
         } else {
           Write-Host "Tag $env:VERSION already exists."
         }
-    - name: Set TAG_NAME env
+        # export tag for next steps
+        Write-Host "TAG_NAME=$env:VERSION" >> $env:GITHUB_ENV
+
+    # 🚀 Create Release using tag
+    - name: Create Release
       shell: pwsh
       run: |
-       Write-Host "TAG_NAME=$env:VERSION" >> $env:GITHUB_ENV
-
-
-    
-    # 🚀 Create Release (exact tag)
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG_NAME }}
-        name: Release ${{ env.TAG_NAME }}
-        files: setup_output/OptimizerSetup.exe
-        make_latest: true
-        fail_on_unmatched_files: true
+        gh release create $env:TAG_NAME setup_output/OptimizerSetup.exe --title "$env:TAG_NAME" --latest
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     # 🧹 Delete old releases (keep latest)
     - name: Delete old releases
