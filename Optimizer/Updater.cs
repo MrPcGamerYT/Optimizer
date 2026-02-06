@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.IO;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Windows.Forms;
 
 class Updater
@@ -12,15 +13,13 @@ class Updater
         {
             using (WebClient wc = new WebClient())
             {
-                string versionInfo = wc.DownloadString(
+                string json = wc.DownloadString(
                     "https://raw.githubusercontent.com/MrPcGamerYT/Optimizer/refs/heads/main/update.json"
                 );
 
-                string[] lines = versionInfo
-                    .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-
-                string latestVersion = lines[0].Trim();
-                string installerUrl = lines[1].Trim();
+                using JsonDocument doc = JsonDocument.Parse(json);
+                string latestVersion = doc.RootElement.GetProperty("version").GetString();
+                string installerUrl  = doc.RootElement.GetProperty("url").GetString();
 
                 string currentVersion = Application.ProductVersion;
 
@@ -39,15 +38,15 @@ class Updater
 
                         wc.DownloadFile(installerUrl, installerPath);
 
-                        // 🔥 RUN INSTALLER ONLY
+                        // ✅ RUN INSTALLER ONLY
                         Process.Start(new ProcessStartInfo
                         {
                             FileName = installerPath,
                             UseShellExecute = true,
-                            Verb = "runas" // admin
+                            Verb = "runas"
                         });
 
-                        // 🔴 EXIT APP IMMEDIATELY
+                        // ✅ EXIT CURRENT APP
                         Application.Exit();
                     }
                 }
