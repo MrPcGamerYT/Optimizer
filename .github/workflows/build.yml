@@ -33,6 +33,19 @@ jobs:
       with:
         path: installer.iss
 
+    # 🔥 DELETE ALL OLD RELEASES & TAGS
+    - name: Delete previous releases
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release list --limit 100 | ForEach-Object {
+          $tag = ($_ -split "`t")[0]
+          gh release delete $tag -y
+          git push origin :refs/tags/$tag
+        }
+
+    # 🚀 CREATE NEW LATEST RELEASE
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
