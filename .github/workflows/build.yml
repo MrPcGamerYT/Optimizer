@@ -12,19 +12,15 @@ jobs:
       contents: write
 
     steps:
-    # 🔹 Checkout
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 🔹 MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 🔹 NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # 🔹 Build Project
     - name: Build Project
       shell: pwsh
       run: |
@@ -32,34 +28,28 @@ jobs:
         nuget restore "$projectFile"
         msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # 🔹 Build Installer (Inno Setup)
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 🚀 CREATE RELEASE (LATEST)
+    # 🔍 DEBUG (KEEP UNTIL CONFIRMED)
+    - name: Debug installer output
+      shell: pwsh
+      run: |
+        Get-ChildItem -Recurse -Filter *.exe
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.0.${{ github.run_number }}
         name: Release v1.0.0.${{ github.run_number }}
-        files: setup_output/OptimizerSetup.exe
+        files: setup_output/Optimizer-v1-Setup.exe
         make_latest: true
-        draft: false
-        prerelease: false
+        fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 🔐 AUTHENTICATE GH CLI
-    - name: Authenticate gh
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh auth setup-git
-
-    # 🧹 DELETE ALL OLD RELEASES (KEEP LATEST)
     - name: Delete old releases
       shell: pwsh
       env:
@@ -69,6 +59,5 @@ jobs:
           --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
 
         foreach ($tag in $tags) {
-          Write-Host "Deleting $tag"
           gh release delete $tag -y --cleanup-tag
         }
