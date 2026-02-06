@@ -152,6 +152,273 @@ namespace Optimizer
     "bastion","transistor","hollowknight","bindingofisaac",
     "deadbydaylight","hotlinemiami","hotlinemiami2","katana_zero",
     "entertheshinobi","celeste","undertale","limbo","inside"
+
+    // Chunk 2/5 – continued gameExecutables
+    // MMO / Online
+    "wow","worldofwarcraft","wowclassic","ffxiv","finalfantasyxiv",
+    "eso","elderScrollsOnline","runescape","osrs","guildwars2",
+    "blackdesertonline","tera","starwarsbattlefront2","everquest2",
+    "everquest","rift","lineage2","lineage","wildstar","bns",
+    "tera","starwarsoldrepublic","finalfantasyxi","everquestnext",
+    "lostark","newworld","albiononline","trove","arknights","paladinsarena",
+    
+    // Horror / Thriller
+    "phasmophobia","residentEvil2","residentEvil3","residentEvil7",
+    "amnesia","soma","outlast","outlast2","alienisolation",
+    "theevilwithin","theevilwithin2","silentHill2","silentHill3",
+    "silentHill4","deadspace","deadspace2","deadspace3","layersoffear",
+    "layersoffear2","blairwitch","littlehope","manofmedan","darkpicturesmanofmedan",
+    "darkpictureshouseofashes","darkpicturesthedevilinme","amnesiarebirth",
+    
+    // Action / Adventure
+    "control","deathstranding","metroexodus","metro2033","metrolastlight",
+    "shadowofmordor","shadowofwar","hitman3","hitman2","hitman",
+    "witcher2","witcher3","mass_effect","masseffect2","masseffect3",
+    "assassinscreedodyssey","assassinscreedvalhalla","assassinscreedunity",
+    "assassinscreed3","dishonored","dishonored2","prey","tombraider",
+    "shadowofthetombraider","rage2","rage","control","quantumbreak",
+    "alanwake","alanwake2","deathloop","wolfensteinyoungblood",
+    
+    // Indie / Casual
+    "amongus","fallguys","stardewvalley","hades","deadcells","cuphead",
+    "hyperlightdrifter","bindingofisaac","roguelegacy","slaythespire",
+    "katana_zero","entertheshinobi","celeste","limbo","inside",
+    "terraria","factorio","oxygen_not_included","satisfactory","astroneer",
+    "astroneeralpha","grounded","subnautica","subnautica_zeros",
+    "raft","theforest","sonsforest","dontstarve","greenhell","7daystodie",
+    "thelongdark","survivalcraft","projectzomboid","scum","subsistence",
+    
+    // Racing / Sports
+    "forzahorizon4","forzahorizon5","forzamotorsport","nfs","nfsheat",
+    "nfsunbound","nfsmostwanted","assetto_corsa","assettocorsa_competizione",
+    "f1_22","f1_23","dirt5","crew2","rocketleague","easportsfc","fifa23",
+    "fifa22","pes2021","nba2k23","nba2k22","mlbtheshow22","tonyhawkproskater1",
+    "tonyhawkproskater2","tonyhawkproskater3","tonyhawkproskater4","speedrunners",
+    "trackmania","motogp22","wrc10","projectcars2","projectcars3","forza4",
+    
+    // Strategy / MOBA / Card
+    "dota2","leagueoflegends","lol","smite","heroesofthestorm",
+    "starcraft2","warcraft3","ageofempires2","ageofempires4",
+    "civilization6","totalwar","totalwarwarhammer","xcom2",
+    "hearthstone","magicarenabattlegrounds","ironharvest","anno1800",
+    "companyofheroes2","commandandconquer3","commandandconquer4",
+    "supremecommander","warhammer40kdoa","ageofmythology","riseofnations",
+    "starcraftbroodwar","starcraftremastered","commandandconquerredalert2",
+    
+    // Classic / Old School
+    "quake","quake2","quake3","doom","doom2","doom64","wolfenstein3d",
+    "diablo2","diablo2lod","diablo3","warcraft2","warcraft1","starcraft",
+    "commandandconquer","commandandconquerra","ageofempires","ageofempires2",
+    "ageofempires3","heroesofmightandmagic3","heroesofmightandmagic5","baldursgate",
+    "baldursgate2","planescape","icewinddale","icewinddale2","fallout","fallout2",
+    
+    // Misc / Simulation
+    "theSims4","thesims3","thesims2","thesims","cities_skylines","planetcoaster",
+    "planetzoo","survivingmars","rimworld","factorio","railwayempire",
+    "farmingSimulator22","farmingSimulator19","trucksimulator","flightSimulator",
+    "xplane11","xplane12","eliteDangerous","starcitizen","kerbalspaceprogram",
+    
+    // Total: ~200 games in this chunk
+    // Chunk 3/5 – continued gameExecutables
+    // FPS / Tactical
+    "insurgency2","insurgencysandstorm","swat4","swat3","armedassault2",
+    "armedassault","dayofinfamy","hellletloose","verdun","redorchestra",
+    "redorchestra2","risingstorm","risingstorm2","battlefield2142","battlefield1942",
+    "battlefield2","battlefield3","battlefield4","battlefieldv","battlefield1",
+    "callofdutyghosts","callofdutyadvancedwarfare","callofdutyblackops4",
+    "medalofhonor","medalofhonoralliedassault","medalofhonorairborne",
+    "counterstrikeglobaloffensive","counterstrikesource","counterstrike",
+    
+    // Open World / RPG
+    "gothic2","gothic3","gothic1","risen","risen2","risen3",
+    "twoworlds","twoworlds2","fablethelostchap","fable2","fable3",
+    "dragonageorigins","dragonage2","dragonageinquisition",
+    "divinityoriginalsin","divinityoriginalsin2","divinity2",
+    "pillars_of_eternity","pillars_of_eternity2","baldursgate2",
+    "baldursgate3","tormenttidesofnumenera","torment","witcher1","witcher2",
+    "witcher3","mass_effect","masseffect2","masseffect3","mass_effect_andromeda",
+    "outerworlds","fallout1","fallout2","fallout3","falloutnewvegas",
+    "fallout4","fallout76","cyberpunk2077","eldenring","starfield",
+    
+    // Survival / Sandbox
+    "minecraft","minecraftlauncher","minecraftdungeons","terraria","starbound",
+    "valheim","rust","ark","arkse","dayz","subnautica","subnautica_zeros",
+    "raft","theforest","sonsforest","dontstarve","dontstarvetogether","greenhell",
+    "grounded","eco","noita","7daystodie","projectzomboid","scum","subsistence",
+    "survivalcraft","thelongdark","astroneer","astroneeralpha","satisfactory",
+    "stationeers","rimworld","factorio","oxygen_not_included","conanexiles",
+    
+    // Racing / Sports
+    "forzahorizon3","forzahorizon4","forzahorizon5","forzamotorsport7","nfsheat",
+    "nfsunbound","nfsmostwanted","nfsunderground","nfsunderground2",
+    "assetto_corsa","assettocorsa_competizione","f1_22","f1_23","dirt4",
+    "dirt5","crew","crew2","rocketleague","easportsfc","fifa20","fifa21",
+    "fifa22","fifa23","pes2020","pes2021","nba2k20","nba2k21","nba2k22","nba2k23",
+    "mlbtheshow20","mlbtheshow21","mlbtheshow22","tonyhawkproskater1",
+    "tonyhawkproskater2","tonyhawkproskater3","tonyhawkproskater4","trackmania",
+    "speedrunners","wrc10","projectcars2","projectcars3","forza4",
+    
+    // Strategy / MOBA
+    "dota2","leagueoflegends","lol","smite","heroesofthestorm","hearthstone",
+    "magicarenabattlegrounds","starcraft","starcraft2","warcraft3","ageofempires1",
+    "ageofempires2","ageofempires3","ageofempires4","totalwarshogun2","totalwarwarhammer",
+    "totalwarwarhammer2","totalwarwarhammer3","xcom","xcom2","ironharvest","anno1800",
+    "companyofheroes","companyofheroes2","commandandconquer","commandandconquer3",
+    "commandandconquer4","supremecommander","riseofnations","warhammer40kdoa",
+    "ageofmythology","starcraftbroodwar","starcraftremastered","commandandconquerra",
+    
+    // Indie / Casual
+    "amongus","fallguys","cuphead","hades","deadcells","undertale",
+    "stardewvalley","limbo","inside","celeste","slaythespire","katana_zero",
+    "entertheshinobi","hotlinemiami","hotlinemiami2","bastion","transistor",
+    "hyperlightdrifter","bindingofisaac","roguelegacy","factorio","oxygen_not_included",
+    "satisfactory","astroneer","grounded","subnautica","subnautica_zeros","raft","theforest",
+    "sonsforest","dontstarve","greenhell","7daystodie","thelongdark","survivalcraft",
+    "projectzomboid","scum","subsistence",
+    
+    // Horror / Thriller
+    "phasmophobia","residentEvil","residentEvil2","residentEvil3","residentEvil4",
+    "residentEvil5","residentEvil6","residentEvil7","amnesia","soma","outlast",
+    "outlast2","alienisolation","theevilwithin","theevilwithin2","layersoffear",
+    "layersoffear2","blairwitch","littlehope","manofmedan","darkpicturesmanofmedan",
+    "darkpictureshouseofashes","darkpicturesthedevilinme","amnesiarebirth",
+    
+    // Total: ~200 games in this chunk
+    // Chunk 4/5 – continued gameExecutables
+    // FPS / Tactical
+    "insurgency","insurgency2","insurgencysandstorm","swat4","swat3",
+    "armedassault","armedassault2","dayofinfamy","hellletloose","verdun",
+    "redorchestra","redorchestra2","risingstorm","risingstorm2","battlefield2142",
+    "battlefield1942","battlefield2","battlefield3","battlefield4","battlefieldv",
+    "battlefield1","callofduty4","callofduty2","callofduty3","callofdutymw",
+    "callofdutymw2","callofdutymw3","callofdutybo","callofdutybo2","callofdutybo3",
+    "callofdutyghosts","callofdutyadvancedwarfare","callofdutyblackops4",
+    "medalofhonor","medalofhonorairborne","medalofhonoralliedassault",
+    "combatarms","freespace2","doom","doom2","doom64","duke3d","quake1",
+    "quake2","quake3","quake4","unrealtournament","teamfortressclassic",
+    
+    // Open World / RPG
+    "gothic1","gothic2","gothic3","risen","risen2","risen3","twoworlds",
+    "twoworlds2","fablethelostchap","fable2","fable3","dragonageorigins",
+    "dragonage2","dragonageinquisition","divinityoriginalsin","divinityoriginalsin2",
+    "pillars_of_eternity","pillars_of_eternity2","baldursgate","baldursgate2",
+    "torment","tormenttidesofnumenera","witcher1","witcher2","witcher3",
+    "mass_effect","masseffect2","masseffect3","mass_effect_andromeda","outerworlds",
+    "fallout1","fallout2","fallout3","falloutnewvegas","fallout4","fallout76",
+    "cyberpunk2077","eldenring","starfield","kingdomhearts3","kingdomhearts2",
+    
+    // Survival / Sandbox
+    "minecraft","minecraftlauncher","minecraftdungeons","terraria","starbound",
+    "valheim","rust","ark","arkse","dayz","subnautica","subnautica_zeros",
+    "raft","theforest","sonsforest","dontstarve","dontstarvetogether","greenhell",
+    "grounded","eco","noita","7daystodie","projectzomboid","scum","subsistence",
+    "survivalcraft","thelongdark","astroneer","astroneeralpha","satisfactory",
+    "stationeers","rimworld","factorio","oxygen_not_included","conanexiles",
+    
+    // Racing / Sports
+    "forzahorizon3","forzahorizon4","forzahorizon5","forzamotorsport7",
+    "nfsheat","nfsunbound","nfsmostwanted","nfsunderground","nfsunderground2",
+    "assetto_corsa","assettocorsa_competizione","f1_22","f1_23","dirt4",
+    "dirt5","crew","crew2","rocketleague","easportsfc","fifa20","fifa21",
+    "fifa22","fifa23","pes2020","pes2021","nba2k20","nba2k21","nba2k22","nba2k23",
+    "mlbtheshow20","mlbtheshow21","mlbtheshow22","tonyhawkproskater1",
+    "tonyhawkproskater2","tonyhawkproskater3","tonyhawkproskater4","trackmania",
+    "speedrunners","wrc10","projectcars2","projectcars3","forza4",
+    
+    // Strategy / MOBA / Card
+    "dota2","leagueoflegends","lol","smite","heroesofthestorm","hearthstone",
+    "magicarenabattlegrounds","starcraft","starcraft2","warcraft3","ageofempires1",
+    "ageofempires2","ageofempires3","ageofempires4","totalwarshogun2",
+    "totalwarwarhammer","totalwarwarhammer2","totalwarwarhammer3","xcom",
+    "xcom2","ironharvest","anno1800","companyofheroes","companyofheroes2",
+    "commandandconquer","commandandconquer3","commandandconquer4",
+    "supremecommander","riseofnations","warhammer40kdoa","ageofmythology",
+    
+    // Indie / Casual
+    "amongus","fallguys","cuphead","hades","deadcells","undertale",
+    "stardewvalley","limbo","inside","celeste","slaythespire","katana_zero",
+    "entertheshinobi","hotlinemiami","hotlinemiami2","bastion","transistor",
+    "hyperlightdrifter","bindingofisaac","roguelegacy","factorio",
+    "oxygen_not_included","satisfactory","astroneer","grounded","subnautica",
+    "subnautica_zeros","raft","theforest","sonsforest","dontstarve","greenhell",
+    "7daystodie","thelongdark","survivalcraft","projectzomboid","scum","subsistence",
+    
+    // Horror / Thriller
+    "phasmophobia","residentEvil","residentEvil2","residentEvil3","residentEvil4",
+    "residentEvil5","residentEvil6","residentEvil7","amnesia","soma","outlast",
+    "outlast2","alienisolation","theevilwithin","theevilwithin2","layersoffear",
+    "layersoffear2","blairwitch","littlehope","manofmedan","darkpicturesmanofmedan",
+    "darkpictureshouseofashes","darkpicturesthedevilinme","amnesiarebirth"
+    
+    // Total: ~200 games in this chunk
+    // Chunk 5/5 – final gameExecutables
+    // Classic / Retro
+    "doom","doom2","doom64","wolfenstein3d","quake","quake2","quake3","quake4",
+    "duke3d","unrealtournament","unreal","hexen","heretic","blood","carmageddon",
+    "carmageddon2","ageofempires","ageofempires2","ageofempires3","heroesofmightandmagic3",
+    "heroesofmightandmagic4","heroesofmightandmagic5","baldursgate","baldursgate2",
+    "icewinddale","icewinddale2","planescape","fallout","fallout2","fallout3",
+    "falloutnewvegas","diablo","diablo2","diablo2lod","diablo3","warcraft1",
+    "warcraft2","warcraft3","starcraft","starcraftbroodwar","starcraftremastered",
+    "commandandconquer","commandandconquerra","commandandconquer3","commandandconquer4",
+    "redalert","redalert2","redalert3",
+    
+    // Action / Adventure
+    "tombraider","tombraider2","tombraider3","tombraider4","tombraider5",
+    "shadowofthetombraider","unchartedlegacy","uncharted2","uncharted3","uncharted4",
+    "assassinscreed","acorigins","acodyssey","acvalhalla","assassinscreedunity",
+    "assassinscreed3","dishonored","dishonored2","prey","control","deathloop",
+    "wolfensteinyoungblood","wolfenstein2","alanwake","alanwake2","quantumbreak",
+    "hitman","hitman2","hitman3","rage","rage2","metro2033","metrolastlight",
+    "metroexodus","shadowofmordor","shadowofwar","mass_effect","masseffect2",
+    "masseffect3","mass_effect_andromeda","witcher1","witcher2","witcher3","outerworlds",
+    "kingdomhearts3","kingdomhearts2","nierautomata","nierreplicant","talesofarise",
+    
+    // Survival / Sandbox
+    "minecraft","minecraftlauncher","minecraftdungeons","terraria","starbound",
+    "valheim","rust","ark","arkse","dayz","subnautica","subnautica_zeros","raft",
+    "theforest","sonsforest","dontstarve","dontstarvetogether","greenhell","grounded",
+    "eco","noita","7daystodie","projectzomboid","scum","subsistence","survivalcraft",
+    "thelongdark","astroneer","astroneeralpha","satisfactory","stationeers","rimworld",
+    "factorio","oxygen_not_included","conanexiles",
+    
+    // Racing / Sports
+    "forzahorizon4","forzahorizon5","forzamotorsport7","nfsheat","nfsunbound",
+    "nfsmostwanted","nfsunderground","nfsunderground2","assetto_corsa",
+    "assettocorsa_competizione","f1_22","f1_23","dirt4","dirt5","crew","crew2",
+    "rocketleague","easportsfc","fifa20","fifa21","fifa22","fifa23","pes2020",
+    "pes2021","nba2k20","nba2k21","nba2k22","nba2k23","mlbtheshow20","mlbtheshow21",
+    "mlbtheshow22","tonyhawkproskater1","tonyhawkproskater2","tonyhawkproskater3",
+    "tonyhawkproskater4","trackmania","speedrunners","wrc10","projectcars2",
+    "projectcars3","forza4",
+    
+    // Strategy / MOBA / Card
+    "dota2","leagueoflegends","lol","smite","heroesofthestorm","hearthstone",
+    "magicarenabattlegrounds","starcraft","starcraft2","warcraft3","ageofempires1",
+    "ageofempires2","ageofempires3","ageofempires4","totalwarshogun2",
+    "totalwarwarhammer","totalwarwarhammer2","totalwarwarhammer3","xcom","xcom2",
+    "ironharvest","anno1800","companyofheroes","companyofheroes2","commandandconquer",
+    "commandandconquer3","commandandconquer4","supremecommander","riseofnations",
+    "warhammer40kdoa","ageofmythology","starcraftbroodwar","starcraftremastered",
+    "commandandconquerra","redalert","redalert2","redalert3",
+    
+    // Indie / Casual
+    "amongus","fallguys","cuphead","hades","deadcells","undertale","stardewvalley",
+    "limbo","inside","celeste","slaythespire","katana_zero","entertheshinobi",
+    "hotlinemiami","hotlinemiami2","bastion","transistor","hyperlightdrifter",
+    "bindingofisaac","roguelegacy","factorio","oxygen_not_included","satisfactory",
+    "astroneer","grounded","subnautica","subnautica_zeros","raft","theforest",
+    "sonsforest","dontstarve","greenhell","7daystodie","thelongdark","survivalcraft",
+    "projectzomboid","scum","subsistence",
+    
+    // Horror / Thriller
+    "phasmophobia","residentEvil","residentEvil2","residentEvil3","residentEvil4",
+    "residentEvil5","residentEvil6","residentEvil7","amnesia","soma","outlast",
+    "outlast2","alienisolation","theevilwithin","theevilwithin2","layersoffear",
+    "layersoffear2","blairwitch","littlehope","manofmedan","darkpicturesmanofmedan",
+    "darkpictureshouseofashes","darkpicturesthedevilinme","amnesiarebirth"
+    
+    // Total: ~200+ games, final chunk
 };
 
 
