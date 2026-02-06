@@ -57,13 +57,12 @@ jobs:
 
         Write-Host "VERSION=$version" >> $env:GITHUB_ENV
 
-        $json = @"
-        {
-          "version": "$version",
-          "url": "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
-        }
-"@
-        $json | Set-Content -Path update.json -Encoding UTF8
+        $json = @{
+            version = $version
+            url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
+        } | ConvertTo-Json -Compress
+
+        $json | Out-File -FilePath update.json -Encoding UTF8
         Write-Host "Generated update.json: $json"
 
     # 🔹 Commit updater.json changes
@@ -73,10 +72,10 @@ jobs:
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add update.json
-        git commit -m "Update update.json to v$env:VERSION" || echo "No changes"
+        git commit -m "Update update.json to $env:VERSION" || echo "No changes"
         git push
 
-    # 🚀 Create Release (exact version, no "v")
+    # 🚀 Create Release (use exact version)
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
