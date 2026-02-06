@@ -1,4 +1,4 @@
-﻿namespace Optimizer
+namespace Optimizer
 
 {
     partial class Optimizer
@@ -45,7 +45,7 @@
             this.guna2Button2 = new Guna.UI2.WinForms.Guna2Button();
             this.guna2Button1 = new Guna.UI2.WinForms.Guna2Button();
             this.usageTimer = new System.Windows.Forms.Timer(this.components);
-            this.Honepnl = new Guna.UI2.WinForms.Guna2Panel();
+            this.Homepnl = new Guna.UI2.WinForms.Guna2Panel();
             this.guna2Panel2 = new Guna.UI2.WinForms.Guna2Panel();
             this.guna2Separator2 = new Guna.UI2.WinForms.Guna2Separator();
             this.label10 = new System.Windows.Forms.Label();
@@ -142,7 +142,7 @@
             this.guna2DragControl7 = new Guna.UI2.WinForms.Guna2DragControl(this.components);
             this.guna2DragControl8 = new Guna.UI2.WinForms.Guna2DragControl(this.components);
             this.guna2Panel1.SuspendLayout();
-            this.Honepnl.SuspendLayout();
+            this.Homepnl.SuspendLayout();
             this.guna2Panel2.SuspendLayout();
             this.rambar.SuspendLayout();
             this.cpubar.SuspendLayout();
@@ -420,19 +420,19 @@
             // 
             this.usageTimer.Interval = 1000;
             // 
-            // Honepnl
+            // Homepnl
             // 
-            this.Honepnl.BorderRadius = 15;
-            this.Honepnl.Controls.Add(this.guna2Panel2);
-            this.Honepnl.Controls.Add(this.label2);
-            this.Honepnl.Controls.Add(this.label1);
-            this.Honepnl.Controls.Add(this.rambar);
-            this.Honepnl.Controls.Add(this.cpubar);
-            this.Honepnl.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(31)))), ((int)(((byte)(33)))), ((int)(((byte)(42)))));
-            this.Honepnl.Location = new System.Drawing.Point(70, 92);
-            this.Honepnl.Name = "Honepnl";
-            this.Honepnl.Size = new System.Drawing.Size(718, 299);
-            this.Honepnl.TabIndex = 12;
+            this.Homepnl.BorderRadius = 15;
+            this.Homepnl.Controls.Add(this.guna2Panel2);
+            this.Homepnl.Controls.Add(this.label2);
+            this.Homepnl.Controls.Add(this.label1);
+            this.Homepnl.Controls.Add(this.rambar);
+            this.Homepnl.Controls.Add(this.cpubar);
+            this.Homepnl.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(31)))), ((int)(((byte)(33)))), ((int)(((byte)(42)))));
+            this.Homepnl.Location = new System.Drawing.Point(70, 92);
+            this.Homepnl.Name = "Homepnl";
+            this.Homepnl.Size = new System.Drawing.Size(718, 299);
+            this.Homepnl.TabIndex = 12;
             // 
             // guna2Panel2
             // 
@@ -941,14 +941,14 @@
             this.btnCpuBoost.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(141)))), ((int)(((byte)(141)))), ((int)(((byte)(141)))));
             this.btnCpuBoost.FillColor = System.Drawing.Color.Transparent;
             this.btnCpuBoost.FillColor2 = System.Drawing.Color.Transparent;
-            this.btnCpuBoost.Font = new System.Drawing.Font("Orbitron", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnCpuBoost.Font = new System.Drawing.Font("Orbitron", 8.249999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnCpuBoost.ForeColor = System.Drawing.Color.White;
             this.btnCpuBoost.GradientMode = System.Drawing.Drawing2D.LinearGradientMode.Vertical;
             this.btnCpuBoost.HoverState.BorderColor = System.Drawing.Color.White;
-            this.btnCpuBoost.Location = new System.Drawing.Point(168, 72);
+            this.btnCpuBoost.Location = new System.Drawing.Point(182, 73);
             this.btnCpuBoost.Name = "btnCpuBoost";
             this.btnCpuBoost.PressedColor = System.Drawing.Color.Transparent;
-            this.btnCpuBoost.Size = new System.Drawing.Size(170, 34);
+            this.btnCpuBoost.Size = new System.Drawing.Size(142, 34);
             this.btnCpuBoost.TabIndex = 16;
             this.btnCpuBoost.Text = "CPU Priority Boost";
             this.btnCpuBoost.Click += new System.EventHandler(this.guna2GradientTileButton1_Click);
@@ -968,14 +968,14 @@
             this.btnRamBoost.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(141)))), ((int)(((byte)(141)))), ((int)(((byte)(141)))));
             this.btnRamBoost.FillColor = System.Drawing.Color.Transparent;
             this.btnRamBoost.FillColor2 = System.Drawing.Color.Transparent;
-            this.btnRamBoost.Font = new System.Drawing.Font("Orbitron", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnRamBoost.Font = new System.Drawing.Font("Orbitron", 8.249999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnRamBoost.ForeColor = System.Drawing.Color.White;
             this.btnRamBoost.GradientMode = System.Drawing.Drawing2D.LinearGradientMode.Vertical;
             this.btnRamBoost.HoverState.BorderColor = System.Drawing.Color.White;
-            this.btnRamBoost.Location = new System.Drawing.Point(9, 73);
+            this.btnRamBoost.Location = new System.Drawing.Point(32, 73);
             this.btnRamBoost.Name = "btnRamBoost";
             this.btnRamBoost.PressedColor = System.Drawing.Color.Transparent;
-            this.btnRamBoost.Size = new System.Drawing.Size(110, 34);
+            this.btnRamBoost.Size = new System.Drawing.Size(125, 34);
             this.btnRamBoost.TabIndex = 9;
             this.btnRamBoost.Text = "Boost RAM";
             this.btnRamBoost.Click += new System.EventHandler(this.btnRamBoost_Click);
@@ -995,14 +995,14 @@
             this.btnQuickFlush.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(141)))), ((int)(((byte)(141)))), ((int)(((byte)(141)))));
             this.btnQuickFlush.FillColor = System.Drawing.Color.Transparent;
             this.btnQuickFlush.FillColor2 = System.Drawing.Color.Transparent;
-            this.btnQuickFlush.Font = new System.Drawing.Font("Orbitron", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnQuickFlush.Font = new System.Drawing.Font("Orbitron", 8.249999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnQuickFlush.ForeColor = System.Drawing.Color.White;
             this.btnQuickFlush.GradientMode = System.Drawing.Drawing2D.LinearGradientMode.Vertical;
             this.btnQuickFlush.HoverState.BorderColor = System.Drawing.Color.White;
-            this.btnQuickFlush.Location = new System.Drawing.Point(163, 193);
+            this.btnQuickFlush.Location = new System.Drawing.Point(23, 128);
             this.btnQuickFlush.Name = "btnQuickFlush";
             this.btnQuickFlush.PressedColor = System.Drawing.Color.Transparent;
-            this.btnQuickFlush.Size = new System.Drawing.Size(175, 34);
+            this.btnQuickFlush.Size = new System.Drawing.Size(134, 34);
             this.btnQuickFlush.TabIndex = 18;
             this.btnQuickFlush.Text = "Temp Memory Flush";
             this.btnQuickFlush.Click += new System.EventHandler(this.btnQuickFlush_Click);
@@ -1022,14 +1022,14 @@
             this.btnNetBoost.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(141)))), ((int)(((byte)(141)))), ((int)(((byte)(141)))));
             this.btnNetBoost.FillColor = System.Drawing.Color.Transparent;
             this.btnNetBoost.FillColor2 = System.Drawing.Color.Transparent;
-            this.btnNetBoost.Font = new System.Drawing.Font("Orbitron", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnNetBoost.Font = new System.Drawing.Font("Orbitron", 8.249999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnNetBoost.ForeColor = System.Drawing.Color.White;
             this.btnNetBoost.GradientMode = System.Drawing.Drawing2D.LinearGradientMode.Vertical;
             this.btnNetBoost.HoverState.BorderColor = System.Drawing.Color.White;
-            this.btnNetBoost.Location = new System.Drawing.Point(9, 193);
+            this.btnNetBoost.Location = new System.Drawing.Point(23, 182);
             this.btnNetBoost.Name = "btnNetBoost";
             this.btnNetBoost.PressedColor = System.Drawing.Color.Transparent;
-            this.btnNetBoost.Size = new System.Drawing.Size(110, 34);
+            this.btnNetBoost.Size = new System.Drawing.Size(134, 34);
             this.btnNetBoost.TabIndex = 17;
             this.btnNetBoost.Text = "Net Boost";
             this.btnNetBoost.Click += new System.EventHandler(this.btnNetBoost_Click);
@@ -1061,14 +1061,14 @@
             this.btnBgApps.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(141)))), ((int)(((byte)(141)))), ((int)(((byte)(141)))));
             this.btnBgApps.FillColor = System.Drawing.Color.Transparent;
             this.btnBgApps.FillColor2 = System.Drawing.Color.Transparent;
-            this.btnBgApps.Font = new System.Drawing.Font("Orbitron", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnBgApps.Font = new System.Drawing.Font("Orbitron", 8.249999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnBgApps.ForeColor = System.Drawing.Color.White;
             this.btnBgApps.GradientMode = System.Drawing.Drawing2D.LinearGradientMode.Vertical;
             this.btnBgApps.HoverState.BorderColor = System.Drawing.Color.White;
-            this.btnBgApps.Location = new System.Drawing.Point(74, 112);
+            this.btnBgApps.Location = new System.Drawing.Point(182, 128);
             this.btnBgApps.Name = "btnBgApps";
             this.btnBgApps.PressedColor = System.Drawing.Color.Transparent;
-            this.btnBgApps.Size = new System.Drawing.Size(199, 34);
+            this.btnBgApps.Size = new System.Drawing.Size(142, 34);
             this.btnBgApps.TabIndex = 10;
             this.btnBgApps.Text = "End Background Apps";
             this.btnBgApps.Click += new System.EventHandler(this.btnBgApps_Click);
@@ -1101,14 +1101,14 @@
             this.btnHighPerf.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(141)))), ((int)(((byte)(141)))), ((int)(((byte)(141)))));
             this.btnHighPerf.FillColor = System.Drawing.Color.Transparent;
             this.btnHighPerf.FillColor2 = System.Drawing.Color.Transparent;
-            this.btnHighPerf.Font = new System.Drawing.Font("Orbitron", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnHighPerf.Font = new System.Drawing.Font("Orbitron", 8.249999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnHighPerf.ForeColor = System.Drawing.Color.White;
             this.btnHighPerf.GradientMode = System.Drawing.Drawing2D.LinearGradientMode.Vertical;
             this.btnHighPerf.HoverState.BorderColor = System.Drawing.Color.White;
-            this.btnHighPerf.Location = new System.Drawing.Point(68, 152);
+            this.btnHighPerf.Location = new System.Drawing.Point(182, 181);
             this.btnHighPerf.Name = "btnHighPerf";
             this.btnHighPerf.PressedColor = System.Drawing.Color.Transparent;
-            this.btnHighPerf.Size = new System.Drawing.Size(210, 34);
+            this.btnHighPerf.Size = new System.Drawing.Size(142, 34);
             this.btnHighPerf.TabIndex = 11;
             this.btnHighPerf.Text = "High Performance Mode";
             this.btnHighPerf.Click += new System.EventHandler(this.btnHighPerf_Click);
@@ -1779,7 +1779,7 @@
             this.guna2DragControl4.DockIndicatorTransparencyValue = 0.6D;
             this.guna2DragControl4.DragEndTransparencyValue = 0.8D;
             this.guna2DragControl4.DragStartTransparencyValue = 0.7D;
-            this.guna2DragControl4.TargetControl = this.Honepnl;
+            this.guna2DragControl4.TargetControl = this.Homepnl;
             this.guna2DragControl4.UseTransparentDrag = true;
             // 
             // guna2DragControl5
@@ -1820,12 +1820,12 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(34)))));
             this.ClientSize = new System.Drawing.Size(800, 403);
-            this.Controls.Add(this.Honepnl);
             this.Controls.Add(this.boostpnl);
             this.Controls.Add(this.Cleanerpnl);
-            this.Controls.Add(this.gamemodpnl);
-            this.Controls.Add(this.infopnl);
             this.Controls.Add(this.settingspnl);
+            this.Controls.Add(this.infopnl);
+            this.Controls.Add(this.Homepnl);
+            this.Controls.Add(this.gamemodpnl);
             this.Controls.Add(this.guna2Panel1);
             this.Controls.Add(this.guna2Separator1);
             this.Controls.Add(this.titel);
@@ -1836,9 +1836,10 @@
             this.Name = "Optimizer";
             this.Opacity = 0.8D;
             this.Text = "Optimizer";
+            this.Load += new System.EventHandler(this.Optimizer_Load);
             this.guna2Panel1.ResumeLayout(false);
-            this.Honepnl.ResumeLayout(false);
-            this.Honepnl.PerformLayout();
+            this.Homepnl.ResumeLayout(false);
+            this.Homepnl.PerformLayout();
             this.guna2Panel2.ResumeLayout(false);
             this.guna2Panel2.PerformLayout();
             this.rambar.ResumeLayout(false);
@@ -1887,7 +1888,7 @@
         private System.Windows.Forms.Timer usageTimer;
         private Guna.UI2.WinForms.Guna2Panel boostpnl;
         private Guna.UI2.WinForms.Guna2Panel Cleanerpnl;
-        private Guna.UI2.WinForms.Guna2Panel Honepnl;
+        private Guna.UI2.WinForms.Guna2Panel Homepnl;
         private Guna.UI2.WinForms.Guna2CircleProgressBar rambar;
         private System.Windows.Forms.Label ramusage;
         private Guna.UI2.WinForms.Guna2CircleProgressBar cpubar;
