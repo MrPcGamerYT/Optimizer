@@ -3,46 +3,64 @@ using System.Net;
 using System.IO;
 using System.Diagnostics;
 using System.Windows.Forms;
-using System.Threading;
 
 class Updater
 {
-    // Call this method to check for updates
     public static void CheckAndUpdate()
     {
         try
         {
-            WebClient wc = new WebClient();
-            string versionInfo = wc.DownloadString("https://raw.githubusercontent.com/MrPcGamerYT/Optimizer/refs/heads/main/update.json");
-            string[] lines = versionInfo.Split(new string[] { "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            string latestVersion = lines[0].Trim();
-            string downloadUrl = lines[1].Trim();
-
-            string currentVersion = Application.ProductVersion;
-
-            if (latestVersion != currentVersion)
+            using (WebClient wc = new WebClient())
             {
-                if (MessageBox.Show($"New version {latestVersion} is available. Update now?", "Update", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                string versionInfo = wc.DownloadString(
+                    "https://raw.githubusercontent.com/MrPcGamerYT/Optimizer/refs/heads/main/update.json"
+                );
+
+                string[] lines = versionInfo
+                    .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+                string latestVersion = lines[0].Trim();
+                string installerUrl = lines[1].Trim();
+
+                string currentVersion = Application.ProductVersion;
+
+                if (latestVersion != currentVersion)
                 {
-                    string tempFile = Path.Combine(Path.GetTempPath(), "Optimizer_new.exe");
-                    wc.DownloadFile(downloadUrl, tempFile);
-
-                    // Launch the updater process
-                    Process.Start(new ProcessStartInfo
+                    if (MessageBox.Show(
+                        $"New version {latestVersion} is available.\n\nUpdate now?",
+                        "Optimizer Update",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Information) == DialogResult.Yes)
                     {
-                        FileName = tempFile,
-                        Arguments = "/update",
-                        UseShellExecute = true
-                    });
+                        string installerPath = Path.Combine(
+                            Path.GetTempPath(),
+                            "Optimizer-Setup.exe"
+                        );
 
-                    // Close current app
-                    Application.Exit();
+                        wc.DownloadFile(installerUrl, installerPath);
+
+                        // 🔥 RUN INSTALLER ONLY
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = installerPath,
+                            UseShellExecute = true,
+                            Verb = "runas" // admin
+                        });
+
+                        // 🔴 EXIT APP IMMEDIATELY
+                        Application.Exit();
+                    }
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            MessageBox.Show("Could not check for updates.");
+            MessageBox.Show(
+                "Could not check for updates.\n" + ex.Message,
+                "Update Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
         }
     }
 }
