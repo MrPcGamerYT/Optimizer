@@ -5,123 +5,119 @@ using System.Diagnostics;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
 
-namespace Optimizer
+class Updater
 {
-    public static class Updater
+    private const string UpdateInfoUrl =
+        "https://raw.githubusercontent.com/MrPcGamerYT/Optimizer/main/update.json";
+
+    public static void CheckAndUpdate()
     {
-        private const string UpdateInfoUrl =
-            "https://raw.githubusercontent.com/MrPcGamerYT/Optimizer/main/update.json";
-
-        private static bool hasCheckedThisSession = false;
-
-        /// <summary>
-        /// Call this method once on app startup to check for updates.
-        /// </summary>
-        public static void CheckAndUpdate()
-{
-    if (hasCheckedThisSession) return;
-    hasCheckedThisSession = true;
-
-    // Fixes connection issues with GitHub
-    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls13;
-
-    try
-    {
-        using (WebClient wc = new WebClient())
+        try
         {
-            wc.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
-            string json = wc.DownloadString(UpdateInfoUrl);
-
-            string latestVersionText = ExtractJsonValue(json, "version");
-            string installerUrl = ExtractJsonValue(json, "url");
-
-            // Get the version of the app currently running
-            string currentVersionText = Application.ProductVersion;
-
-            // If Latest is NOT greater than Current, stop here
-            if (CompareVersions(latestVersionText, currentVersionText) <= 0)
-                return;
-
-            // Updated message box to show both versions for debugging
-            DialogResult dr = MessageBox.Show(
-                $"A new version is available!\n\n" +
-                $"Latest: {latestVersionText}\n" +
-                $"Your Version: {currentVersionText}\n\n" +
-                $"Download and install now?",
-                "Optimizer Update",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Information
-            );
-
-            if (dr != DialogResult.Yes) return;
-
-            string installerPath = Path.Combine(Path.GetTempPath(), "OptimizerSetup.exe");
-            if (File.Exists(installerPath)) File.Delete(installerPath);
-
-            wc.DownloadFile(installerUrl, installerPath);
-
-            Process.Start(new ProcessStartInfo
+            using (WebClient wc = new WebClient())
             {
-                FileName = installerPath,
-                UseShellExecute = true,
-                Verb = "runas"
-            });
+                // Disable caching to always get the latest JSON
+                wc.CachePolicy = new System.Net.Cache.RequestCachePolicy(
+                    System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
 
-            Application.Exit(); 
-        }
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show("Update error: " + ex.Message);
-    }
-}
-        // Extract a JSON value by key (simple regex, no library)
-        private static string ExtractJsonValue(string json, string key)
-        {
-            var match = Regex.Match(
-                json,
-                $"\"{key}\"\\s*:\\s*\"([^\"]+)\"",
-                RegexOptions.IgnoreCase
-            );
+                string json = wc.DownloadString(UpdateInfoUrl);
 
-            if (!match.Success)
-                throw new Exception($"Missing '{key}' in update.json");
+                string latestVersionText = ExtractJsonValue(json, "version");
+                string installerUrl = ExtractJsonValue(json, "url");
 
-            return match.Groups[1].Value;
-        }
+                // Compare versions: if latest <= current, do nothing
+                if (CompareVersions(latestVersionText, Application.ProductVersion) <= 0)
+                    return; // already up-to-date
 
-        // Compare semantic versions: 1 = latest > current, -1 = latest < current, 0 = equal
-        private static int CompareVersions(string vLatest, string vCurrent)
-        {
-            int[] latestParts = ParseVersionParts(vLatest);
-            int[] currentParts = ParseVersionParts(vCurrent);
+                // Ask user to update
+                if (MessageBox.Show(
+                    $"New version {latestVersionText} is available.\n\nUpdate now?",
+                    "Optimizer Update",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information) != DialogResult.Yes)
+                    return;
 
-            int maxLength = Math.Max(latestParts.Length, currentParts.Length);
+                string installerPath = Path.Combine(
+                    Path.GetTempPath(),
+                    "OptimizerSetup.exe"
+                );
 
-            for (int i = 0; i < maxLength; i++)
-            {
-                int latest = (i < latestParts.Length) ? latestParts[i] : 0;
-                int current = (i < currentParts.Length) ? currentParts[i] : 0;
+                // Remove previous installer if exists
+                if (File.Exists(installerPath))
+                    File.Delete(installerPath);
 
-                if (latest > current) return 1;
-                if (latest < current) return -1;
+                // Download latest installer
+                wc.DownloadFile(installerUrl, installerPath);
+
+                // Run installer only (never the main exe)
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = installerPath,
+                    UseShellExecute = true,
+                    Verb = "runas" // prompt for admin
+                });
+
+                // Force exit the current app immediately
+                Environment.Exit(0);
             }
-
-            return 0;
         }
-
-        private static int[] ParseVersionParts(string v)
+        catch (Exception ex)
         {
-            var match = Regex.Match(v, @"\d+(\.\d+)*");
-            if (!match.Success)
-                throw new Exception("Invalid version format: " + v);
-
-            string[] parts = match.Value.Split('.');
-            int[] numbers = new int[parts.Length];
-            for (int i = 0; i < parts.Length; i++)
-                numbers[i] = int.Parse(parts[i]);
-
-            return numbers;
+            MessageBox.Show(
+                "Update failed:\n" + ex.Message,
+                "Update Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
         }
+    }
+
+    // Extract a JSON value by key (no external library required)
+    private static string ExtractJsonValue(string json, string key)
+    {
+        var match = Regex.Match(
+            json,
+            $"\"{key}\"\\s*:\\s*\"([^\"]+)\"",
+            RegexOptions.IgnoreCase
+        );
+
+        if (!match.Success)
+            throw new Exception($"Missing '{key}' in update.json");
+
+        return match.Groups[1].Value;
+    }
+
+    // Compare semantic versions: returns 1 if latest > current, -1 if latest < current, 0 if equal
+    private static int CompareVersions(string vLatest, string vCurrent)
+    {
+        int[] latestParts = ParseVersionParts(vLatest);
+        int[] currentParts = ParseVersionParts(vCurrent);
+
+        int maxLength = Math.Max(latestParts.Length, currentParts.Length);
+
+        for (int i = 0; i < maxLength; i++)
+        {
+            int latest = (i < latestParts.Length) ? latestParts[i] : 0;
+            int current = (i < currentParts.Length) ? currentParts[i] : 0;
+
+            if (latest > current) return 1;
+            if (latest < current) return -1;
+        }
+
+        return 0; // equal
+    }
+
+    private static int[] ParseVersionParts(string v)
+    {
+        var match = Regex.Match(v, @"\d+(\.\d+)*");
+        if (!match.Success)
+            throw new Exception("Invalid version format: " + v);
+
+        string[] parts = match.Value.Split('.');
+        int[] numbers = new int[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+            numbers[i] = int.Parse(parts[i]);
+
+        return numbers;
     }
 }
