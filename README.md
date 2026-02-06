@@ -66,12 +66,10 @@ It is designed to improve system performance, clean junk files, boost games & em
 
 ### ⚙️ Settings
 
-* Start with Windows
 * Minimize to system tray
   *(Required for background game/emulator boosting)*
 * Reduce UI animations (toggle switch)
 * Persistent settings (saved automatically)
-* Admin status indicator
 
 ---
 
