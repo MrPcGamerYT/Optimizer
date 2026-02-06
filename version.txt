@@ -1,2 +1,2 @@
-1.0
+1.0.0.0
 https://github.com/MrPcGamerYT/Optimizer/releases/download/v1/Optimizer-v1-Setup.exe
