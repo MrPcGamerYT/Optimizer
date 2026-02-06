@@ -12,7 +12,7 @@ jobs:
       contents: write
 
     steps:
-    # 🔹 Checkout Code
+    # 🔹 Checkout code
     - name: Checkout Code
       uses: actions/checkout@v4
 
@@ -24,7 +24,7 @@ jobs:
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # 🔹 Calculate Version
+    # 🔹 Calculate version
     - name: Calculate Version
       id: version
       shell: pwsh
@@ -38,7 +38,7 @@ jobs:
         Write-Host "VERSION=$version" >> $env:GITHUB_ENV
         Write-Host "Calculated version: $version"
 
-    # 🔹 Update csproj Version
+    # 🔹 Update csproj version
     - name: Update csproj Version
       shell: pwsh
       run: |
@@ -48,17 +48,32 @@ jobs:
           -replace '<Version>.*</Version>', "<Version>$env:VERSION</Version>" | Set-Content $projectFile
         Write-Host "Updated csproj to version $env:VERSION"
 
-    # 🔹 Update Inno Setup Version
+    # 🔹 Update Inno Setup version safely
     - name: Update Inno Setup Version
       shell: pwsh
       run: |
         $issFile = "installer.iss"
-        (Get-Content $issFile) `
-          -replace 'AppVersion=.*', "AppVersion=$env:VERSION" `
-          -replace 'VersionInfoVersion=.*', "VersionInfoVersion=$env:VERSION" | Set-Content $issFile
+        $content = Get-Content $issFile
+
+        # Ensure AppVersion exists
+        if ($content -notmatch '^AppVersion=.*') {
+            $index = ($content | Select-String -Pattern '^\[Setup\]').LineNumber
+            $content = $content[0..($index-1)] + "AppVersion=$env:VERSION" + $content[$index..($content.Length-1)]
+        } else {
+            $content = $content -replace 'AppVersion=.*', "AppVersion=$env:VERSION"
+        }
+
+        # Ensure VersionInfoVersion exists
+        if ($content -notmatch '^VersionInfoVersion=.*') {
+            $content += "`nVersionInfoVersion=$env:VERSION"
+        } else {
+            $content = $content -replace 'VersionInfoVersion=.*', "VersionInfoVersion=$env:VERSION"
+        }
+
+        $content | Set-Content $issFile -Encoding UTF8
         Write-Host "Updated installer version to $env:VERSION"
 
-    # 🔹 Build Project
+    # 🔹 Build project
     - name: Build Project
       shell: pwsh
       run: |
@@ -66,20 +81,19 @@ jobs:
         nuget restore "$projectFile"
         msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # 🔹 Build Installer
+    # 🔹 Build installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 🔹 Find Installer Output (relative path)
+    # 🔹 Find installer output (relative path)
     - name: Find Installer
       id: find_installer
       shell: pwsh
       run: |
         $installer = Get-ChildItem -Recurse -Filter OptimizerSetup.exe | Select-Object -First 1
         if (-not $installer) { throw "OptimizerSetup.exe not found!" }
-        # convert absolute path to relative for action-gh-release
         $relative = $installer.FullName.Replace("${env:GITHUB_WORKSPACE}\", "").Replace('\','/')
         Write-Host "INSTALLER_PATH=$relative" >> $env:GITHUB_ENV
         Write-Host "Installer found at $relative"
@@ -105,7 +119,7 @@ jobs:
         git commit -m "Auto update update.json to $env:VERSION" || echo "No changes to commit"
         git push
 
-    # 🚀 Create GitHub Release
+    # 🚀 Create GitHub release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
