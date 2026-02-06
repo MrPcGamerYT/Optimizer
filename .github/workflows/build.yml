@@ -12,15 +12,19 @@ jobs:
       contents: write
 
     steps:
+    # 🔹 Checkout
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    # 🔹 MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
+    # 🔹 NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
+    # 🔹 Build Project
     - name: Build Project
       shell: pwsh
       run: |
@@ -28,17 +32,19 @@ jobs:
         nuget restore "$projectFile"
         msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
+    # 🔹 Build Installer (Inno Setup)
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 🔍 DEBUG (KEEP UNTIL CONFIRMED)
+    # 🔍 DEBUG – confirm installer exists
     - name: Debug installer output
       shell: pwsh
       run: |
-        Get-ChildItem -Recurse -Filter *.exe
+        Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
+    # 🚀 CREATE RELEASE
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -50,6 +56,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    # 🧹 DELETE OLD RELEASES (KEEP LATEST)
     - name: Delete old releases
       shell: pwsh
       env:
@@ -59,5 +66,6 @@ jobs:
           --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
 
         foreach ($tag in $tags) {
+          Write-Host "Deleting $tag"
           gh release delete $tag -y --cleanup-tag
         }
