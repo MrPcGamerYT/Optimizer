@@ -1,4 +1,4 @@
-give me full code name: Build and Release v1
+name: Build and Release v1
 
 on:
   push:
