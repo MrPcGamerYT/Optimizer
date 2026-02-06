@@ -38,7 +38,7 @@ jobs:
       with:
         path: installer.iss
 
-    # 🔹 Debug installer output
+    # 🔹 Debug Installer Output
     - name: Debug Installer Output
       shell: pwsh
       run: |
@@ -71,32 +71,43 @@ jobs:
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add update.json
-        git commit -m "Update update.json to $env:VERSION" || echo "No changes"
+        git commit -m "Update updater.json to $env:VERSION" || echo "No changes"
         git push
 
-    # 🔹 Create Git tag and push
+    # 🔹 Read version from updater.json and set TAG_NAME
+    - name: Read version from updater.json
+      shell: pwsh
+      run: |
+        $json = Get-Content update.json | ConvertFrom-Json
+        $version = $json.version
+        Write-Host "TAG_NAME=$version" >> $env:GITHUB_ENV
+        Write-Host "Using version from updater.json as tag: $version"
+
+    # 🔹 Create Git tag based on updater.json version
     - name: Create Git Tag
       shell: pwsh
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
-        if (-not (git tag -l $env:VERSION)) {
-          git tag $env:VERSION
-          git push origin $env:VERSION
-          Write-Host "Tag $env:VERSION created and pushed."
+        if (-not (git tag -l $env:TAG_NAME)) {
+          git tag $env:TAG_NAME
+          git push origin $env:TAG_NAME
+          Write-Host "Tag $env:TAG_NAME created and pushed."
         } else {
-          Write-Host "Tag $env:VERSION already exists."
+          Write-Host "Tag $env:TAG_NAME already exists."
         }
-        # export tag for next steps
-        Write-Host "TAG_NAME=$env:VERSION" >> $env:GITHUB_ENV
 
-    # 🚀 Create Release using tag
+    # 🚀 Create GitHub Release using updater.json version as tag
     - name: Create Release
-      shell: pwsh
-      run: |
-        gh release create $env:TAG_NAME setup_output/OptimizerSetup.exe --title "$env:TAG_NAME" --latest
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG_NAME }}
+        name: Release ${{ env.TAG_NAME }}
+        files: setup_output/OptimizerSetup.exe
+        make_latest: true
+        fail_on_unmatched_files: true
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     # 🧹 Delete old releases (keep latest)
     - name: Delete old releases
