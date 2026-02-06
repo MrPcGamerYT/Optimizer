@@ -48,6 +48,16 @@ jobs:
           -replace '<Version>.*</Version>', "<Version>$env:VERSION</Version>" | Set-Content $projectFile
         Write-Host "Updated csproj to version $env:VERSION"
 
+    # 🔹 Update Inno Setup Version
+    - name: Update Inno Setup Version
+      shell: pwsh
+      run: |
+        $issFile = "installer.iss"
+        (Get-Content $issFile) `
+          -replace 'AppVersion=.*', "AppVersion=$env:VERSION" `
+          -replace 'VersionInfoVersion=.*', "VersionInfoVersion=$env:VERSION" | Set-Content $issFile
+        Write-Host "Updated installer version to $env:VERSION"
+
     # 🔹 Build Project
     - name: Build Project
       shell: pwsh
@@ -62,15 +72,17 @@ jobs:
       with:
         path: installer.iss
 
-    # 🔹 Find Installer Output
+    # 🔹 Find Installer Output (relative path)
     - name: Find Installer
       id: find_installer
       shell: pwsh
       run: |
         $installer = Get-ChildItem -Recurse -Filter OptimizerSetup.exe | Select-Object -First 1
         if (-not $installer) { throw "OptimizerSetup.exe not found!" }
-        Write-Host "INSTALLER_PATH=$($installer.FullName)" >> $env:GITHUB_ENV
-        Write-Host "Installer found at $($installer.FullName)"
+        # convert absolute path to relative for action-gh-release
+        $relative = $installer.FullName.Replace("${env:GITHUB_WORKSPACE}\", "").Replace('\','/')
+        Write-Host "INSTALLER_PATH=$relative" >> $env:GITHUB_ENV
+        Write-Host "Installer found at $relative"
 
     # 🔹 Generate update.json
     - name: Generate update.json
@@ -97,9 +109,9 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "v${{ env.VERSION }}"                 # Use version as tag
+        tag_name: "v${{ env.VERSION }}"
         name: "Release v${{ env.VERSION }}"
-        files: "${{ env.INSTALLER_PATH }}"             # Dynamic installer path
+        files: "${{ env.INSTALLER_PATH }}"
         make_latest: true
         fail_on_unmatched_files: true
       env:
