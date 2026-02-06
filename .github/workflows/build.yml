@@ -38,14 +38,14 @@ jobs:
       with:
         path: installer.iss
 
-    # 🔹 Debug installer output
+    # 🔹 Debug Installer Output
     - name: Debug Installer Output
       shell: pwsh
       run: |
         Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
-    # 🧠 Generate VERSION and updater.json
-    - name: Generate VERSION and updater.json
+    # 🧠 Generate updater.json & VERSION
+    - name: Generate updater.json
       shell: pwsh
       run: |
         $runNumber = [int]$env:GITHUB_RUN_NUMBER
@@ -74,19 +74,26 @@ jobs:
         git commit -m "Update update.json to $env:VERSION" || echo "No changes"
         git push
 
-    # 🔹 Create Git tag
+    # 🔹 Create Git tag and push
     - name: Create Git Tag
       shell: pwsh
       run: |
-        git tag $env:VERSION
-        git push origin $env:VERSION
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        if (-not (git tag -l $env:VERSION)) {
+          git tag $env:VERSION
+          git push origin $env:VERSION
+          Write-Host "Tag $env:VERSION created and pushed."
+        } else {
+          Write-Host "Tag $env:VERSION already exists."
+        }
 
-    # 🚀 Create Release
+    # 🚀 Create Release (exact tag)
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ env.VERSION }}
-        name: Release ${{ env.VERSION }}
+        tag_name: ${{ env.TAG_NAME }}
+        name: Release ${{ env.TAG_NAME }}
         files: setup_output/OptimizerSetup.exe
         make_latest: true
         fail_on_unmatched_files: true
