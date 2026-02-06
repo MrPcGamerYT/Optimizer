@@ -11,6 +11,13 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      MAJOR: 1
+      MINOR: ${{ github.run_number / 10000 }}
+      BUILD: ${{ (github.run_number / 100) % 100 }}
+      REVISION: ${{ github.run_number % 100 }}
+      VERSION: ${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.BUILD }}.${{ env.REVISION }}
+
     steps:
     # 🔹 Checkout
     - name: Checkout Code
@@ -38,48 +45,47 @@ jobs:
       with:
         path: installer.iss
 
-    # 🔍 DEBUG – confirm installer exists
-    - name: Debug installer output
+    # 🔹 Debug installer
+    - name: Debug Installer Output
       shell: pwsh
       run: |
         Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
-       # 🧠 AUTO-GENERATE updater.json
+    # 🧠 Generate updater.json
     - name: Generate updater.json
       shell: pwsh
       run: |
-        $version = "1.0.0.${{ github.run_number }}"
         $json = @"
-        {
-          `"version`": `"$version`",
-          `"url`": `"https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe`"
-        }
-        "@
-        Set-Content update.json $json
-    
+{
+  `"version`": `"$env:VERSION`",
+  `"url`": `"https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe`"
+}
+"@
+        Set-Content update.json $json -Encoding UTF8
+
+    # 🔹 Commit updater.json changes
     - name: Commit updater.json
       shell: pwsh
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add update.json
-        git commit -m "Update update.json to v1.0.0.${{ github.run_number }}" || echo "No changes"
+        git commit -m "Update update.json to v$env:VERSION" || echo "No changes"
         git push
 
-
-    # 🚀 CREATE RELEASE
+    # 🚀 Create Release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v1.0.0.${{ github.run_number }}
-        name: Release v1.0.0.${{ github.run_number }}
+        tag_name: v${{ env.VERSION }}
+        name: Release v${{ env.VERSION }}
         files: setup_output/OptimizerSetup.exe
         make_latest: true
         fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 🧹 DELETE OLD RELEASES (KEEP LATEST)
+    # 🧹 Delete Old Releases (Keep latest)
     - name: Delete old releases
       shell: pwsh
       env:
@@ -87,7 +93,6 @@ jobs:
       run: |
         $tags = gh release list --json tagName,createdAt `
           --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
-
         foreach ($tag in $tags) {
           Write-Host "Deleting $tag"
           gh release delete $tag -y --cleanup-tag
