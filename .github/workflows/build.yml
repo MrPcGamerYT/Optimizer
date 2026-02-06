@@ -44,6 +44,29 @@ jobs:
       run: |
         Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
+       # 🧠 AUTO-GENERATE updater.json
+    - name: Generate updater.json
+      shell: pwsh
+      run: |
+        $version = "1.0.0.${{ github.run_number }}"
+        $json = @"
+        {
+          `"version`": `"$version`",
+          `"url`": `"https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe`"
+        }
+        "@
+        Set-Content updater.json $json
+    
+    - name: Commit updater.json
+      shell: pwsh
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add updater.json
+        git commit -m "Update updater.json to v1.0.0.${{ github.run_number }}" || echo "No changes"
+        git push
+
+
     # 🚀 CREATE RELEASE
     - name: Create Release
       uses: softprops/action-gh-release@v2
