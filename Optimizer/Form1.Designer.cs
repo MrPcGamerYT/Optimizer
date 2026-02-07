@@ -1298,7 +1298,7 @@ namespace Optimizer
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(248, 57);
             this.label8.TabIndex = 21;
-            this.label8.Text = "Disable Background Apps While Gaming";
+            this.label8.Text = "Disable Background Apps";
             this.label8.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.label8.Click += new System.EventHandler(this.label8_Click);
             // 
@@ -1377,9 +1377,10 @@ namespace Optimizer
             this.label4.ForeColor = System.Drawing.Color.White;
             this.label4.Location = new System.Drawing.Point(8, 87);
             this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(248, 25);
+            this.label4.Size = new System.Drawing.Size(261, 25);
             this.label4.TabIndex = 15;
-            this.label4.Text = "Emulator Game Mod";
+            this.label4.Text = "Advanced Game Mod";
+            this.label4.Click += new System.EventHandler(this.label4_Click_1);
             // 
             // label5
             // 
