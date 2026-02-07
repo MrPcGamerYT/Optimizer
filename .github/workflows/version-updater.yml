@@ -24,7 +24,7 @@ jobs:
         if ([string]::IsNullOrWhiteSpace($version)) { Write-Error "Version is empty!"; exit 1 }
         Write-Host "APP_VERSION=$version" >> $env:GITHUB_ENV
 
-    # 2️⃣ Update AssemblyInfo.cs using regex replacement (like csproj)
+    # 2️⃣ Update AssemblyInfo.cs using regex replacement
     - name: Update AssemblyInfo.cs
       shell: pwsh
       run: |
@@ -34,55 +34,48 @@ jobs:
         $version = $env:APP_VERSION
         $content = Get-Content $assemblyPath -Raw
 
-        # Replace AssemblyVersion and AssemblyFileVersion lines
-        $content = $content -replace 'AssemblyVersion\(".*"\)', "AssemblyVersion(`"$version`")"
-        $content = $content -replace 'AssemblyFileVersion\(".*"\)', "AssemblyFileVersion(`"$version`")"
+        # Replace or add AssemblyVersion and AssemblyFileVersion lines
+        if ($content -match 'AssemblyVersion\(".*"\)') {
+            $content = $content -replace 'AssemblyVersion\(".*"\)', "AssemblyVersion(`"$version`")"
+        } else {
+            $content += "`n[assembly: AssemblyVersion(`"$version`")]"
+        }
+
+        if ($content -match 'AssemblyFileVersion\(".*"\)') {
+            $content = $content -replace 'AssemblyFileVersion\(".*"\)', "AssemblyFileVersion(`"$version`")"
+        } else {
+            $content += "`n[assembly: AssemblyFileVersion(`"$version`")]"
+        }
 
         # Save the updated AssemblyInfo.cs
         $content | Set-Content $assemblyPath -Encoding UTF8
-
         Write-Host "AssemblyInfo.cs updated to version $version"
 
-
-    # 3️⃣ Update .csproj version
+    # 3️⃣ Update .csproj version safely
     - name: Update csproj version
       shell: pwsh
       run: |
-          $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
-          [xml]$csproj = Get-Content $projectFile
+        $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
+        [xml]$csproj = Get-Content $projectFile
 
-          # Find the first PropertyGroup that has a Version node
-          $pg = $csproj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1
+        # Use first PropertyGroup
+        $pg = $csproj.Project.PropertyGroup[0]
 
-          if (-not $pg) {
-          # If no Version node exists, create it
-          $pg = $csproj.Project.PropertyGroup[0]
-          $versionNode = $csproj.CreateElement("Version")
-          $pg.AppendChild($versionNode) | Out-Null
-          $pg = $pg  # reassign for innertext
-          $pg.Version = $versionNode
-          }
+        function Set-OrCreateNode($parent, $name, $value) {
+            $node = $parent.SelectSingleNode($name)
+            if (-not $node) {
+                $node = $csproj.CreateElement($name)
+                $parent.AppendChild($node) | Out-Null
+            }
+            $node.InnerText = $value
+        }
 
-          # Set the InnerText of Version, FileVersion, and AssemblyVersion
-          $pg.Version.InnerText = $env:APP_VERSION
+        Set-OrCreateNode $pg "Version" $env:APP_VERSION
+        Set-OrCreateNode $pg "FileVersion" $env:APP_VERSION
+        Set-OrCreateNode $pg "AssemblyVersion" $env:APP_VERSION
 
-          # Also update FileVersion and AssemblyVersion nodes if they exist
-          if (-not $pg.FileVersion) {
-          $fileNode = $csproj.CreateElement("FileVersion")
-          $pg.AppendChild($fileNode) | Out-Null
-          }
-          $pg.FileVersion.InnerText = $env:APP_VERSION
-
-          if (-not $pg.AssemblyVersion) {
-          $assemblyNode = $csproj.CreateElement("AssemblyVersion")
-          $pg.AppendChild($assemblyNode) | Out-Null
-          }
-          $pg.AssemblyVersion.InnerText = $env:APP_VERSION
-
-          # Save the csproj
-          $csproj.Save($projectFile)
-          Write-Host "$projectFile version updated to $env:APP_VERSION"
-
+        $csproj.Save($projectFile)
+        Write-Host "$projectFile version updated to $env:APP_VERSION"
 
     # 4️⃣ Commit changes
     - name: Commit updated files
