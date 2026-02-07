@@ -1,10 +1,10 @@
-name: Update Version
+name: Update Project Version
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Project version (example: 1.0.1 or 1.0.1.0)"
+        description: "Project version (example: 1.0.2 or 1.0.2.0)"
         required: true
 
 jobs:
@@ -31,15 +31,6 @@ jobs:
         $json | Set-Content -Path update.json -Encoding UTF8
         Write-Host "Generated update.json: $json"
 
-    - name: Commit update.json
-      shell: pwsh
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        git add update.json
-        git commit -m "Update update.json to ${{ github.event.inputs.version }}" || echo "No changes"
-        git push
-
     # 2️⃣ Update AssemblyInfo.cs
     - name: Update AssemblyInfo.cs
       shell: powershell
@@ -53,7 +44,7 @@ jobs:
           exit 1
         }
 
-        Write-Host "Found AssemblyInfo at $($file.FullName)"
+        Write-Host "Found AssemblyInfo.cs at $($file.FullName)"
 
         (Get-Content $file.FullName) `
           -replace '\[assembly:\s*AssemblyVersion\(".*?"\)\]', "[assembly: AssemblyVersion(`"$version`")]" `
@@ -62,11 +53,34 @@ jobs:
 
         Write-Host "Updated AssemblyInfo.cs to version $version"
 
-    - name: Commit AssemblyInfo.cs
+    # 3️⃣ Update installer.iss
+    - name: Update installer.iss
+      shell: powershell
+      run: |
+        $version = "${{ github.event.inputs.version }}"
+
+        $file = Get-ChildItem -Recurse -Filter "installer.iss" -File | Select-Object -First 1
+
+        if (-not $file) {
+          Write-Error "installer.iss not found!"
+          exit 1
+        }
+
+        Write-Host "Found installer.iss at $($file.FullName)"
+
+        (Get-Content $file.FullName) `
+          -replace '^AppVersion\s*=.*', "AppVersion=$version" `
+          -replace '^VersionInfoVersion\s*=.*', "VersionInfoVersion=$version" |
+        Set-Content $file.FullName -Encoding UTF8
+
+        Write-Host "Updated installer.iss to version $version"
+
+    # 4️⃣ Commit all changes
+    - name: Commit version updates
       shell: pwsh
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add .
-        git commit -m "Update AssemblyInfo version to ${{ github.event.inputs.version }}" || echo "No changes"
+        git commit -m "Update project version to ${{ github.event.inputs.version }}" || echo "No changes to commit"
         git push
