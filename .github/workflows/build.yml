@@ -20,6 +20,7 @@ jobs:
     - name: Generate updater.json
       shell: pwsh
       run: |
+        # Generate version from run number
         $runNumber = [int]$env:GITHUB_RUN_NUMBER
         $major = 1
         $minor = [math]::Floor($runNumber / 10000)
@@ -27,8 +28,10 @@ jobs:
         $revision = $runNumber % 100
         $version = "$major.$minor.$build.$revision"
 
+        # Set GitHub env variable
         Write-Host "VERSION=$version" >> $env:GITHUB_ENV
 
+        # Create updater.json
         $json = @{
             version = $version
             url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
@@ -37,17 +40,18 @@ jobs:
         $json | Set-Content -Path update.json -Encoding UTF8
         Write-Host "Generated update.json: $json"
 
-    # 🔹 Update AssemblyInfo.cs with update.json version
+    # 🔹 Update AssemblyInfo.cs version
     - name: Sync AssemblyInfo.cs version
       shell: pwsh
       run: |
         $assemblyFile = "Optimizer/Properties/AssemblyInfo.cs"
-        Write-Host "Updating AssemblyInfo.cs with version $env:VERSION"
 
         if (-Not (Test-Path $assemblyFile)) {
           Write-Error "AssemblyInfo.cs not found at $assemblyFile"
           exit 1
         }
+
+        Write-Host "Updating AssemblyInfo.cs with version $env:VERSION"
 
         (Get-Content $assemblyFile) `
           -replace 'AssemblyVersion\(".*"\)', "AssemblyVersion(`"$env:VERSION`")" `
@@ -69,7 +73,10 @@ jobs:
       shell: pwsh
       run: |
         $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
+        Write-Host "Restoring NuGet packages for $projectFile"
         nuget restore $projectFile
+
+        Write-Host "Building project $projectFile..."
         msbuild $projectFile /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
     # 🔹 Build Installer
