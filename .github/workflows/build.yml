@@ -131,14 +131,14 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     # Delete old releases (keep latest)
-- name: Delete old releases
-  shell: pwsh
-  env:
-    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  run: |
-    $tags = gh release list --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
+    - name: Delete old releases
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+       $tags = gh release list --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
 
-    if (-not [string]::IsNullOrEmpty($tags)) {
+       if (-not [string]::IsNullOrEmpty($tags)) {
         $tagsArray = $tags -split "`n"
         foreach ($tag in $tagsArray) {
             if (-not [string]::IsNullOrWhiteSpace($tag)) {
@@ -146,7 +146,7 @@ jobs:
                 gh release delete $tag -y --cleanup-tag
             }
         }
-    } else {
+       } else {
         Write-Host "No old releases to delete."
-    }
+       }
 
