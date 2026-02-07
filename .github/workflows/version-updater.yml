@@ -11,16 +11,18 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Increment Version and Update Files
+    - name: Increment Version and Update Project File
       shell: pwsh
       run: |
-        # Path to AssemblyInfo.cs
-        $assemblyInfoPath = "$(Get-ChildItem -Recurse -Filter AssemblyInfo.cs | Select-Object -First 1).FullName"
+        # Find the first .csproj file
+        $projectFile = (Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1).FullName
 
-        # Read current version from AssemblyInfo.cs
-        $assemblyContent = Get-Content $assemblyInfoPath
-        $versionLine = $assemblyContent | Where-Object { $_ -match 'AssemblyVersion' }
-        $currentVersion = ($versionLine -split '"')[1]
+        # Read the project file content
+        $projectContent = Get-Content $projectFile -Raw
+
+        # Extract the current version
+        $versionPattern = '<Version>(.*?)</Version>'
+        $currentVersion = [regex]::Match($projectContent, $versionPattern).Groups[1].Value
 
         # Split current version into components
         $versionParts = $currentVersion.Split('.')
@@ -32,11 +34,11 @@ jobs:
         # Construct new version
         $newVersion = "$major.$minor.$build.$revision"
 
-        # Update AssemblyInfo.cs with the new version
-        $assemblyContent = $assemblyContent | ForEach-Object {
-          $_ -replace 'AssemblyVersion\(".*"\)', "AssemblyVersion(`"$newVersion`")"
-        }
-        $assemblyContent | Set-Content $assemblyInfoPath
+        # Update the version in the project file
+        $updatedContent = $projectContent -replace $versionPattern, "<Version>$newVersion</Version>"
+
+        # Write the updated content back to the project file
+        $updatedContent | Set-Content -Path $projectFile -Encoding utf8
 
         # Update updater.json with the new version
         $json = @{
@@ -51,6 +53,6 @@ jobs:
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
-        git add AssemblyInfo.cs update.json
+        git add $projectFile update.json
         git commit -m "Increment version to $newVersion"
         git push
