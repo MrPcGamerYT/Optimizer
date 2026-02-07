@@ -1,14 +1,17 @@
 using Guna.UI2.WinForms;
 using Microsoft.Win32;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Management;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.ServiceProcess;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -18,6 +21,9 @@ namespace Optimizer
 {
     public partial class Optimizer : Form
     {
+        // 🔁 Store original priorities
+        private Dictionary<int, ProcessPriorityClass> originalPriorities
+            = new Dictionary<int, ProcessPriorityClass>();
 
         // Should we remember the last panel? (toggle ON/OFF)
         private bool rememberLastPanel = true; // user can change this later
@@ -34,18 +40,18 @@ namespace Optimizer
             lblAdminStatus.ForeColor = color;
         }
 
-        private Timer trayBlinkTimer;
+        private System.Windows.Forms.Timer trayBlinkTimer;
         private bool trayBlinkState = false;
         private Icon trayIconNormal;
         private Icon trayIconAlert;
 
-
+        private bool advancedGameModeRunning = false;
         private NotifyIcon trayIcon;
         private bool suppressMinimizeEvent = false;
         private bool allowExit = false;
         private ContextMenuStrip trayMenu;
         private bool bgAppBoostRunning = false;
-        private Timer pingTimer;
+        private System.Windows.Forms.Timer pingTimer;
 
         [DllImport("user32.dll")]
         static extern IntPtr GetForegroundWindow();
@@ -55,6 +61,58 @@ namespace Optimizer
 
         private float currentOverall = 0;
         private int targetOverall = 0;
+
+        private bool IsProtectedProcess(Process p)
+        {
+            try
+            {
+                string name = p.ProcessName.ToLower();
+
+                // Core Windows / System
+                string[] protectedNames =
+                {
+            "system",
+            "idle",
+            "explorer",
+            "dwm",
+            "audiodg",
+            "svchost",
+            "services",
+            "wininit",
+            "winlogon",
+            "lsass",
+            "csrss",
+            "smss",
+            "fontdrvhost"
+        };
+
+                // Protect Optimizer itself
+                if (name == Process.GetCurrentProcess().ProcessName.ToLower())
+                    return true;
+
+                // Protect Windows core
+                if (protectedNames.Any(x => name == x))
+                    return true;
+
+                // Protect current detected game
+                if (currentGame != null &&
+                    name.Equals(currentGame.ToLower(), StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+
+                // Protect emulators
+                if (emulatorProcesses.Any(e =>
+                    name.Equals(e.ToLower(), StringComparison.OrdinalIgnoreCase)))
+                    return true;
+
+
+                return false;
+            }
+            catch
+            {
+                return true; // if unsure → PROTECT
+            }
+        }
 
         private int CalculateOverallCondition(int cpu, int ram, int drive)
         {
@@ -80,7 +138,7 @@ namespace Optimizer
         private string currentGame = null;
 
         // Known PC game executables
-        private readonly string[] gameExecutables = 
+        private readonly string[] gameExecutables =
 {
     // FPS / Shooters
     "csgo","cs2","valorant","fortnite","apex","pubg","pubg_lite",
@@ -420,7 +478,8 @@ namespace Optimizer
     
     // Total: ~200+ games, final chunk
 };
-
+        // Fast + no-duplicate game list
+        private HashSet<string> gameExecutablesSet;
 
         private async void NormalGameModeLoop()
         {
@@ -428,7 +487,7 @@ namespace Optimizer
             {
                 bool found = false;
 
-                foreach (string game in gameExecutables)
+                foreach (string game in gameExecutablesSet)
                 {
                     Process[] p = Process.GetProcessesByName(game);
                     if (p.Length > 0)
@@ -461,32 +520,45 @@ namespace Optimizer
                     }));
                 }
 
-                await Task.Delay(2000);
+                await Task.Delay(3500);
             }
         }
+
 
         private void ApplyNormalGameBoost(Process game)
         {
             try
             {
-                game.PriorityClass = ProcessPriorityClass.High;
+                // ✅ Safe priority for the game
+                game.PriorityClass = ProcessPriorityClass.AboveNormal;
 
                 foreach (Process p in Process.GetProcesses())
                 {
                     try
                     {
-                        if (!p.ProcessName.Equals(game.ProcessName, StringComparison.OrdinalIgnoreCase) &&
-                            !p.ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
-                            !p.ProcessName.StartsWith("System"))
-                        {
-                            p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                        }
+                        // 🔒 Skip protected processes
+                        if (IsProtectedProcess(p))
+                            continue;
+
+                        // ❌ Never touch the active game
+                        if (p.Id == game.Id)
+                            continue;
+
+                        // ⬇ Lower background apps safely
+                        p.PriorityClass = ProcessPriorityClass.BelowNormal;
                     }
-                    catch { }
+                    catch
+                    {
+                        // ignore access denied processes
+                    }
                 }
             }
-            catch { }
+            catch
+            {
+                // ignore game access errors
+            }
         }
+
 
 
         // ===============================
@@ -510,21 +582,43 @@ namespace Optimizer
             {
                 foreach (string emu in emulatorProcesses)
                 {
-                    foreach (Process p in Process.GetProcessesByName(emu))
+                    Process[] emuProcs;
+
+                    try
+                    {
+                        emuProcs = Process.GetProcessesByName(emu);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    foreach (Process p in emuProcs)
                     {
                         try
                         {
-                            p.PriorityClass = ProcessPriorityClass.High;
-                            p.ProcessorAffinity =
-                                (IntPtr)((1 << Environment.ProcessorCount) - 1);
+                            if (p.HasExited)
+                                continue;
+
+                            // 🔒 Safety first
+                            if (IsProtectedProcess(p))
+                                continue;
+
+                            // ✅ Safe boost (let Windows handle affinity)
+                            if (p.PriorityClass != ProcessPriorityClass.AboveNormal)
+                                p.PriorityClass = ProcessPriorityClass.AboveNormal;
                         }
-                        catch { }
+                        catch
+                        {
+                            // access denied → ignore
+                        }
                     }
                 }
 
-                await Task.Delay(2000);
+                await Task.Delay(3000); // ⏱ less aggressive, more stable
             }
         }
+
 
         private void UpdateEmulatorStatus()
         {
@@ -556,7 +650,7 @@ namespace Optimizer
         // SMOOTHING VARIABLES
         // ===============================
         // Higher value = faster/snappier, Lower value = smoother/slower
-        private const float smoothing = 0.12f; 
+        private const float smoothing = 0.12f;
 
         private float currentCpu = 0;
         private int targetCpu = 0;
@@ -572,7 +666,7 @@ namespace Optimizer
         // ===============================
         private PerformanceCounter cpuCounter;
         private DriveInfo systemDrive;
-        private Timer animationTimer;
+        private System.Windows.Forms.Timer animationTimer;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         private class MEMORYSTATUSEX
@@ -612,7 +706,7 @@ namespace Optimizer
             // ===============================
             // PING TIMER (1s)
             // ===============================
-            pingTimer = new Timer();
+            pingTimer = new System.Windows.Forms.Timer();
             pingTimer.Interval = 1000; // 1 second
             pingTimer.Tick += PingTimer_Tick;
             pingTimer.Start();
@@ -626,23 +720,32 @@ namespace Optimizer
             usageTimer.Tick += UsageTimer_Tick;
             usageTimer.Start();
             // High-Speed Animation Timer (16ms ~ 60 FPS)
-            animationTimer = new Timer();
+            animationTimer = new System.Windows.Forms.Timer();
             animationTimer.Interval = 16;
             animationTimer.Tick += AnimationTimer_Tick;
             animationTimer.Start();
             trayIconNormal = this.Icon;
             trayIconAlert = Properties.Resources.Icon;
             LoadSavedSettings();
-            trayBlinkTimer = new Timer();
+            trayBlinkTimer = new System.Windows.Forms.Timer();
             trayBlinkTimer.Interval = 500; // blink speed (ms)
-            trayBlinkTimer.Tick += (s, e) =>
-            {
-                trayBlinkState = !trayBlinkState;
-                trayIcon.Icon = trayBlinkState ? trayIconAlert : trayIconNormal;
-            };
             this.MaximumSize = this.Size;
             this.MinimumSize = this.Size;
             lblVersion.Text = Application.ProductVersion; // ✅ SAFE HERE TOO
+
+            gameExecutablesSet = new HashSet<string>(
+            gameExecutables.Select(g => g.ToLower())
+            );
+
+
+            trayBlinkTimer.Tick += (s, e) =>
+            {
+                if (trayIcon == null) return;
+
+                trayBlinkState = !trayBlinkState;
+                trayIcon.Icon = trayBlinkState ? trayIconAlert : trayIconNormal;
+            };
+
 
         }
 
@@ -661,10 +764,9 @@ namespace Optimizer
 
         private void StartTrayBlink()
         {
-            trayIcon.Visible = true;   // 🔥 REQUIRED
+            trayBlinkState = false;
             trayBlinkTimer.Start();
         }
-
 
         private void StopTrayBlink()
         {
@@ -946,21 +1048,21 @@ namespace Optimizer
         }
 
         private void ShowPanel(Panel p, string panelName)
-{
-    // Hide all panels
-    Homepnl.Visible = Cleanerpnl.Visible = boostpnl.Visible = gamemodpnl.Visible = settingspnl.Visible = infopnl.Visible = false;
+        {
+            // Hide all panels
+            Homepnl.Visible = Cleanerpnl.Visible = boostpnl.Visible = gamemodpnl.Visible = settingspnl.Visible = infopnl.Visible = false;
 
-    // Show selected panel
-    p.Visible = true;
+            // Show selected panel
+            p.Visible = true;
 
-    // ✅ Save last panel only if toggle is ON
-    if (rememberLastPanel)
-    {
-        lastPanel = panelName;
-        Properties.Settings.Default.LastPanel = lastPanel;
-        Properties.Settings.Default.Save();
-    }
-}
+            // ✅ Save last panel only if toggle is ON
+            if (rememberLastPanel)
+            {
+                lastPanel = panelName;
+                Properties.Settings.Default.LastPanel = lastPanel;
+                Properties.Settings.Default.Save();
+            }
+        }
 
 
 
@@ -1057,32 +1159,27 @@ namespace Optimizer
 
         private void btnBgApps_Click(object sender, EventArgs e)
         {
-            Task.Run(() =>
+            if (!bgAppBoostRunning)
             {
-                foreach (Process p in Process.GetProcesses())
-                {
-                    try
-                    {
-                        if (!p.ProcessName.ToLower().Contains("system") &&
-                            !p.ProcessName.ToLower().Contains("explorer"))
-                        {
-                            p.Kill();
-                        }
-                    }
-                    catch { }
-                }
+                bgAppBoostRunning = true;
+                Task.Run(() => BackgroundAppsBoostLoop());
 
-                this.Invoke((Action)(() =>
-                {
-                    ShowBoostPopup("Background Apps Closed ✔", Color.Lime);
-                }));
-            });
+                ShowBoostPopup("Background Apps Optimized ✔", Color.Lime);
+            }
         }
+
+
 
         private void btnHighPerf_Click(object sender, EventArgs e)
         {
-            Process.Start("cmd.exe", "/c powercfg -setactive SCHEME_MIN");
-            ShowBoostPopup("High Performance Enabled ⚡", Color.Orange);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "powercfg",
+                Arguments = "-setactive SCHEME_MIN",
+                Verb = "runas",
+                CreateNoWindow = true,
+                UseShellExecute = true
+            });
         }
 
         private async void ShowBoostPopup(string message, Color color)
@@ -1106,67 +1203,99 @@ namespace Optimizer
         {
             try
             {
-                // 1. Ultimate Performance
-                Process.Start("cmd.exe", "/c powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
-
-                // 2. Disable CPU Throttling
-                Registry.SetValue(
-                    @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
-                    "PowerThrottlingOff",
-                    1,
-                    RegistryValueKind.DWord
-                );
-
-                // 3. Reduce visual effects
-                Registry.SetValue(
-                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
-                    "VisualFXSetting",
-                    2,
-                    RegistryValueKind.DWord
-                );
-
-                // 4. Kill background apps (safe)
-                foreach (Process p in Process.GetProcesses())
+                // 1️⃣ Switch to Ultimate Performance (Windows 10/11 Pro+)
+                try
                 {
-                    try
+                    Process.Start(new ProcessStartInfo
                     {
-                        if (!p.ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
-                            !p.ProcessName.StartsWith("System"))
-                        {
-                            p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                        }
-                    }
-                    catch { }
+                        FileName = "powercfg",
+                        Arguments = "-setactive e9a42b02-d5df-448d-aa00-03f14749eb61",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
                 }
+                catch { }
+
+                // 2️⃣ Disable CPU Power Throttling (system-wide)
+                try
+                {
+                    Registry.SetValue(
+                        @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                        "PowerThrottlingOff",
+                        1,
+                        RegistryValueKind.DWord
+                    );
+                }
+                catch { }
+
+                // 3️⃣ Reduce visual effects (Best performance)
+                try
+                {
+                    Registry.SetValue(
+                        @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
+                        "VisualFXSetting",
+                        2, // 2 = Best performance
+                        RegistryValueKind.DWord
+                    );
+                }
+                catch { }
             }
-            catch { }
+            catch
+            {
+                // final safety net (never crash app)
+            }
         }
+
 
         private void DisableAdvancedGameMode()
         {
             try
             {
-                // Balanced Power Plan
-                Process.Start("cmd.exe", "/c powercfg -setactive SCHEME_BALANCED");
+                // 🔁 Restore Balanced power plan
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "powercfg",
+                        Arguments = "-setactive 381b4222-f694-41f0-9685-ff5bb260df2e",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
+                }
+                catch { }
 
-                // Enable CPU Throttling back
-                Registry.SetValue(
-                    @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
-                    "PowerThrottlingOff",
-                    0,
-                    RegistryValueKind.DWord
-                );
+                // 🔁 Re-enable CPU Power Throttling
+                try
+                {
+                    Registry.SetValue(
+                        @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                        "PowerThrottlingOff",
+                        0,
+                        RegistryValueKind.DWord
+                    );
+                }
+                catch { }
 
-                // Restore visuals
-                Registry.SetValue(
-                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
-                    "VisualFXSetting",
-                    0,
-                    RegistryValueKind.DWord
-                );
+                // 🔁 Restore visual effects to Windows default
+                try
+                {
+                    Registry.SetValue(
+                        @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
+                        "VisualFXSetting",
+                        1, // 1 = Let Windows decide
+                        RegistryValueKind.DWord
+                    );
+                }
+                catch { }
             }
-            catch { }
+            catch
+            {
+                // safety net
+            }
         }
+
+
+
 
         private void label4_Click(object sender, EventArgs e)
         {
@@ -1177,36 +1306,72 @@ namespace Optimizer
         {
             Task.Run(() =>
             {
+                Process fg = null;
+
                 try
                 {
                     IntPtr hwnd = GetForegroundWindow();
-                    GetWindowThreadProcessId(hwnd, out int pid);
+                    if (hwnd == IntPtr.Zero)
+                        return;
 
-                    Process fg = Process.GetProcessById(pid);
-                    fg.PriorityClass = ProcessPriorityClass.High;
+                    GetWindowThreadProcessId(hwnd, out int pid);
+                    fg = Process.GetProcessById(pid);
+
+                    if (fg.HasExited || IsProtectedProcess(fg))
+                        return;
+
+                    // ✅ Foreground gets priority
+                    fg.PriorityClass = ProcessPriorityClass.AboveNormal;
 
                     foreach (Process p in Process.GetProcesses())
                     {
                         try
                         {
-                            if (p.Id != fg.Id &&
-                                !p.ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
-                                !p.ProcessName.StartsWith("System"))
-                            {
-                                p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                            }
+                            if (p.HasExited)
+                                continue;
+
+                            if (p.Id == fg.Id)
+                                continue;
+
+                            if (p.Id == Process.GetCurrentProcess().Id)
+                                continue;
+
+                            if (IsProtectedProcess(p))
+                                continue;
+
+                            if (p.PriorityClass == ProcessPriorityClass.RealTime ||
+                                p.PriorityClass == ProcessPriorityClass.High)
+                                continue;
+
+                            p.PriorityClass = ProcessPriorityClass.BelowNormal;
                         }
-                        catch { }
+                        catch
+                        {
+                            // ignore access denied / exited
+                        }
                     }
                 }
-                catch { }
-
-                this.Invoke((Action)(() =>
+                catch
                 {
-                    ShowBoostPopup("CPU Priority Boost Applied", Color.DeepSkyBlue);
-                }));
+                    // ignore foreground errors
+                }
+
+                if (!IsDisposed && IsHandleCreated)
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        ShowBoostPopup(
+                            fg != null
+                                ? $"CPU Priority Boosted: {fg.ProcessName}"
+                                : "CPU Priority Boost Applied",
+                            Color.DeepSkyBlue
+                        );
+                    }));
+                }
             });
         }
+
+
 
         private void btnNetBoost_Click(object sender, EventArgs e)
         {
@@ -1277,7 +1442,7 @@ namespace Optimizer
 
         private void tgNormalGame_CheckedChanged(object sender, EventArgs e)
         {
-            // ❌ Turn off Advanced Emulator Mode if running
+            // ❌ Prevent conflict with Advanced Emulator Mode
             if (tgNormalGame.Checked && tgAdvancedGame.Checked)
             {
                 tgAdvancedGame.Checked = false;
@@ -1287,10 +1452,8 @@ namespace Optimizer
             {
                 normalGameModeRunning = true;
                 currentGame = null;
-                trayIcon.Visible = true;
-                UpdateTrayBlinkState();
-                // 🔥 NOW IT WILL BLINK
 
+                // ▶ Start game detection loop
                 Task.Run(() => NormalGameModeLoop());
 
                 lblGameModeStatus.Text = "Normal Game Mode: ENABLED";
@@ -1300,16 +1463,21 @@ namespace Optimizer
             {
                 normalGameModeRunning = false;
                 currentGame = null;
-                UpdateTrayBlinkState();
+
                 lblGameModeStatus.Text = "Normal Game Mode: DISABLED";
                 lblGameModeStatus.ForeColor = Color.Orange;
             }
 
+            // 🔔 SINGLE source of truth for tray state
+            UpdateTrayBlinkState();
         }
+
+
+
 
         private void tgAdvancedGame_CheckedChanged(object sender, EventArgs e)
         {
-            // Prevent conflict with Normal Game Mode
+            // ❌ Prevent conflict with Normal Game Mode
             if (tgAdvancedGame.Checked && tgNormalGame.Checked)
             {
                 tgNormalGame.Checked = false;
@@ -1317,43 +1485,49 @@ namespace Optimizer
 
             if (tgAdvancedGame.Checked)
             {
-                emulatorBoostRunning = true;
+                advancedGameModeRunning = true;
 
-                trayIcon.Visible = true;
-                UpdateTrayBlinkState();                // 🔥 NOW IT WILL BLINK
-
-                lblGameModeStatus.Text = "Waiting for Emulator…";
-                lblGameModeStatus.ForeColor = Color.Gold;
-
+                // 🧠 SYSTEM-LEVEL OPTIMIZATIONS ONLY
                 EnableAdvancedGameMode();
 
-                // ✅ DO NOT AWAIT — run in background
-                Task.Run(() => EmulatorBoostLoopAsync());
+                lblGameModeStatus.Text = "Advanced Game Mode: ENABLED 🚀";
+                lblGameModeStatus.ForeColor = Color.Lime;
             }
             else
             {
-                emulatorBoostRunning = false;
-
-                UpdateTrayBlinkState();
+                advancedGameModeRunning = false;
 
                 DisableAdvancedGameMode();
 
-                lblGameModeStatus.Text = "Advanced Emulator Game Mode: DISABLED";
+                lblGameModeStatus.Text = "Advanced Game Mode: DISABLED";
                 lblGameModeStatus.ForeColor = Color.Orange;
             }
+
+            UpdateTrayBlinkState();
         }
+
+
 
         private void UpdateTrayBlinkState()
         {
-            if (normalGameModeRunning || emulatorBoostRunning || bgAppBoostRunning)
+            bool shouldBlink =
+                emulatorBoostRunning ||
+                normalGameModeRunning ||
+                bgAppBoostRunning;
+
+            if (shouldBlink)
             {
+                trayIcon.Visible = true;
                 StartTrayBlink();
             }
             else
             {
                 StopTrayBlink();
+                trayIcon.Visible = false;
             }
         }
+
+
 
 
 
@@ -1361,15 +1535,19 @@ namespace Optimizer
         {
             if (tgBgApps.Checked)
             {
-                bgAppBoostRunning = true;
-
-                Task.Run(() => BackgroundAppsBoostLoop());
+                // ▶ START (only once)
+                if (!bgAppBoostRunning)
+                {
+                    bgAppBoostRunning = true;
+                    Task.Run(() => BackgroundAppsBoostLoop());
+                }
 
                 lblGameModeStatus.Text = "Background Apps Disabled";
                 lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
             }
             else
             {
+                // ⛔ STOP (always)
                 bgAppBoostRunning = false;
 
                 lblGameModeStatus.Text = "Background Apps Restored";
@@ -1377,42 +1555,58 @@ namespace Optimizer
             }
         }
 
+
         private void BackgroundAppsBoostLoop()
         {
             while (bgAppBoostRunning)
             {
-                foreach (Process p in Process.GetProcesses())
+                Process[] processes = Process.GetProcesses();
+
+                foreach (Process p in processes)
                 {
                     try
                     {
-                        string name = p.ProcessName.ToLower();
-
-                        // ❌ NEVER TOUCH SYSTEM / GAME / EMULATOR
-                        if (name.Contains("system") ||
-                            name.Contains("explorer") ||
-                            name.Contains("svchost") ||
-                            name.Contains("wininit") ||
-                            name.Contains("winlogon"))
+                        if (p.HasExited)
                             continue;
 
-                        // Skip game & emulator processes
-                        if (currentGame != null && name.Contains(currentGame.ToLower()))
+                        // 🔒 Absolute safety
+                        if (IsProtectedProcess(p))
                             continue;
 
+                        // 🎮 Never touch active game
+                        if (currentGame != null &&
+                            p.ProcessName.Equals(currentGame, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        // 🧱 Never touch emulators
+                        bool isEmulator = false;
                         foreach (string emu in emulatorProcesses)
-                            if (name.Contains(emu.ToLower()))
-                                goto SKIP;
+                        {
+                            if (p.ProcessName.Equals(emu, StringComparison.OrdinalIgnoreCase))
+                            {
+                                isEmulator = true;
+                                break;
+                            }
+                        }
 
-                        p.PriorityClass = ProcessPriorityClass.BelowNormal;
+                        if (isEmulator)
+                            continue;
+
+                        // ⬇ Lower real background apps only
+                        if (p.PriorityClass != ProcessPriorityClass.BelowNormal)
+                            p.PriorityClass = ProcessPriorityClass.BelowNormal;
                     }
-                    catch { }
-
-                SKIP:;
+                    catch
+                    {
+                        // ignore access denied / exited processes
+                    }
                 }
 
-                System.Threading.Thread.Sleep(3000); // every 3 sec
+                Thread.Sleep(4000); // stable + low CPU
             }
         }
+
+
 
         private void UpdatePing()
         {
@@ -1625,6 +1819,48 @@ namespace Optimizer
                     default: ShowPanel(Homepnl, "Homepnl"); break;
                 }
             }
+        }
+
+        private void label9_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void gamemodpnl_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
+        private void label8_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void tgAdvancedEmulator_CheckedChanged(object sender, EventArgs e)
+        {
+            if (tgAdvancedEmulator.Checked)
+            {
+                // ▶ Start emulator boost (only once)
+                if (!emulatorBoostRunning)
+                {
+                    emulatorBoostRunning = true;
+                    Task.Run(() => EmulatorBoostLoopAsync());
+                }
+
+                lblGameModeStatus.Text = "Advanced Emulator Mode: ENABLED 🕹";
+                lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
+            }
+            else
+            {
+                // ⛔ Stop emulator boost
+                emulatorBoostRunning = false;
+
+                lblGameModeStatus.Text = "Advanced Emulator Mode: DISABLED";
+                lblGameModeStatus.ForeColor = Color.Orange;
+            }
+
+            // 🔔 SINGLE tray control point
+            UpdateTrayBlinkState();
         }
     }
 }
