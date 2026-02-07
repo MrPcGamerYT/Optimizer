@@ -24,34 +24,25 @@ jobs:
         if ([string]::IsNullOrWhiteSpace($version)) { Write-Error "Version is empty!"; exit 1 }
         Write-Host "APP_VERSION=$version" >> $env:GITHUB_ENV
 
-    # 2️⃣ Update AssemblyInfo.cs
+    # 2️⃣ Update AssemblyInfo.cs using regex replacement (like csproj)
     - name: Update AssemblyInfo.cs
       shell: pwsh
       run: |
-        $version = $env:APP_VERSION
         $assemblyPath = "Optimizer/Properties/AssemblyInfo.cs"
+        if (-not (Test-Path $assemblyPath)) { Write-Error "AssemblyInfo.cs not found!"; exit 1 }
 
-        $content = @"
-        using System.Reflection;
-        using System.Runtime.CompilerServices;
-        using System.Runtime.InteropServices;
+        $version = $env:APP_VERSION
+        $content = Get-Content $assemblyPath -Raw
 
-        [assembly: AssemblyTitle("Optimizer")]
-        [assembly: AssemblyDescription("System Optimizer Tool")]
-        [assembly: AssemblyConfiguration("")]
-        [assembly: AssemblyCompany("YoyTuber")]
-        [assembly: AssemblyProduct("Optimizer")]
-        [assembly: AssemblyCopyright("© 2026 Mr.Pc Gamer. All Rights Reserved.")]
-        [assembly: AssemblyTrademark("")]
-        [assembly: AssemblyCulture("")]
-        [assembly: ComVisible(false)]
-        [assembly: Guid("08e58f25-5dd2-42fe-833a-23ad7133b493")]
-        [assembly: AssemblyVersion("$version")]
-        [assembly: AssemblyFileVersion("$version")]
-        "@
+        # Replace AssemblyVersion and AssemblyFileVersion lines
+        $content = $content -replace 'AssemblyVersion\(".*"\)', "AssemblyVersion(`"$version`")"
+        $content = $content -replace 'AssemblyFileVersion\(".*"\)', "AssemblyFileVersion(`"$version`")"
 
+        # Save the updated AssemblyInfo.cs
         $content | Set-Content $assemblyPath -Encoding UTF8
+
         Write-Host "AssemblyInfo.cs updated to version $version"
+
 
     # 3️⃣ Update .csproj version
     - name: Update csproj version
