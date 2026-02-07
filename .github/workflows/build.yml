@@ -1,4 +1,4 @@
-name: Build and Release v1
+name: Build and Release Manual Version
 
 on:
   push:
@@ -16,26 +16,32 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 🧠 Read version from updater.json
-    - name: Read version from updater.json
+    # 🔹 Read manual version from update.json
+    - name: Read version from update.json
       shell: pwsh
       run: |
         if (-Not (Test-Path "update.json")) {
-          Write-Error "update.json not found!"
+          Write-Error "update.json not found! Create it with a valid version first."
           exit 1
         }
+
         $json = Get-Content update.json | ConvertFrom-Json
         $version = $json.version
-        Write-Host "Using version $version from updater.json"
 
-        # Save as environment variable for later steps
+        if ([string]::IsNullOrWhiteSpace($version)) {
+          Write-Error "Version is empty in update.json!"
+          exit 1
+        }
+
+        Write-Host "Using manual version: $version"
         Write-Host "APP_VERSION=$version" >> $GITHUB_ENV
 
-    # 🔹 Update AssemblyInfo.cs with the version from JSON
+    # 🔹 Update AssemblyInfo.cs with manual version
     - name: Update AssemblyInfo.cs
       shell: pwsh
       run: |
         $assemblyFile = "Optimizer/Properties/AssemblyInfo.cs"
+
         if (-Not (Test-Path $assemblyFile)) {
           Write-Error "AssemblyInfo.cs not found!"
           exit 1
@@ -49,7 +55,7 @@ jobs:
           -replace 'AssemblyFileVersion\(".*"\)', "AssemblyFileVersion(`"$version`")" `
           | Set-Content $assemblyFile
 
-        Write-Host "AssemblyInfo.cs updated to $version"
+        Write-Host "AssemblyInfo.cs updated successfully"
 
     # 🔹 Setup MSBuild
     - name: Setup MSBuild
@@ -84,17 +90,17 @@ jobs:
       run: |
         Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
-    # 🔹 Commit updated updater.json (optional)
+    # 🔹 Commit any changes to updater.json (optional)
     - name: Commit updater.json
       shell: pwsh
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add update.json
-        git commit -m "Update update.json to $env:APP_VERSION" || echo "No changes"
+        git commit -m "Update updater.json to $env:APP_VERSION" || echo "No changes"
         git push
 
-    # 🚀 Create Release
+    # 🚀 Create Release with manual version
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -106,7 +112,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 🧹 Delete old releases
+    # 🧹 Delete old releases (keep latest)
     - name: Delete old releases
       shell: pwsh
       env:
