@@ -28,7 +28,6 @@ jobs:
     - name: Generate version and update update.json
       shell: pwsh
       run: |
-        # Read existing update.json
         if (Test-Path update.json) {
             $updateJson = Get-Content update.json -Raw | ConvertFrom-Json
             $currentVersion = if ($updateJson.version) { $updateJson.version } else { "1.0.0" }
@@ -36,14 +35,12 @@ jobs:
             $currentVersion = "1.0.0"
         }
 
-        # Increment patch version automatically
         $parts = $currentVersion.Split(".") | ForEach-Object {[int]$_}
-        $parts[2] += 1
+        $parts[2] += 1  # Increment patch
         $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
         Write-Host "VERSION=$newVersion" >> $env:GITHUB_ENV
         Write-Host "New version: $newVersion"
 
-        # Create/update update.json
         $jsonObject = @{
             version = $newVersion
             url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
@@ -72,7 +69,7 @@ jobs:
       with:
         path: installer.iss
 
-    # 🔹 Locate Installer dynamically
+    # 🔹 Verify installer exists
     - name: Locate Installer
       shell: pwsh
       run: |
