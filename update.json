@@ -1,1 +1,5 @@
-{"url":"https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe","version":""}
+$json = @{
+    version = "$env:VERSION"
+    url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
+} | ConvertTo-Json -Compress
+$json | Set-Content -Path update.json -Encoding UTF8
