@@ -33,55 +33,27 @@ jobs:
         git push
 
     - name: Update AssemblyInfo.cs
-      shell: pwsh
+      shell: powershell
       run: |
-        $sc = @{
-            using System.Reflection;
-            using System.Runtime.CompilerServices;
-            using System.Runtime.InteropServices;
+        $version = "${{ github.event.inputs.version }}"
+        $file = Get-ChildItem -Recurse -Filter "AssemblyInfo.cs" | Select-Object -First 1
 
-            // General Information about an assembly is controlled through the following
-            // set of attributes. Change these attribute values to modify the information
-            // associated with an assembly.
-            [assembly: AssemblyTitle("Optimizer")]
-            [assembly: AssemblyDescription("System Optimizer Tool")]
-            [assembly: AssemblyConfiguration("")]
-            [assembly: AssemblyCompany("YoyTuber")]
-            [assembly: AssemblyProduct("Optimizer")]
-            [assembly: AssemblyCopyright("© 2026 Mr.Pc Gamer. All Rights Reserved.")]
-            [assembly: AssemblyTrademark("")]
-            [assembly: AssemblyCulture("")]
+        if (-not $file) {
+          Write-Error "AssemblyInfo.cs not found!"
+          exit 1
+        }
 
-            // Setting ComVisible to false makes the types in this assembly not visible
-            // to COM components.  If you need to access a type in this assembly from
-            // COM, set the ComVisible attribute to true on that type.
-            [assembly: ComVisible(false)]
+        (Get-Content $file) `
+          -replace '\[assembly:\s*AssemblyVersion\(".*?"\)\]', "[assembly: AssemblyVersion(`"$version`")]" `
+          -replace '\[assembly:\s*AssemblyFileVersion\(".*?"\)\]', "[assembly: AssemblyFileVersion(`"$version`")]" |
+        Set-Content $file
 
-            // The following GUID is for the ID of the typelib if this project is exposed to COM
-            [assembly: Guid("08e58f25-5dd2-42fe-833a-23ad7133b493")]
+        Write-Host "Updated AssemblyInfo.cs to version $version"
 
-            // Version information for an assembly consists of the following four values:
-            //
-            //      Major Version
-            //      Minor Version
-            //      Build Number
-            //      Revision
-            //
-            [assembly: AssemblyVersion("1.0.1")]
-            [assembly: AssemblyFileVersion("1.0.1")]
-
-
-
-        } | Set-Content $assemblyPath -Encoding UTF8
-
-        Write-Host "AssemblyInfo.cs updated to version $sc"
-
-    # 3️⃣ Commit changes
-    - name: Commit updated AssemblyInfo.cs
-      shell: pwsh
+    - name: Commit changes
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
-        git add Optimizer/Properties/AssemblyInfo.cs
-        git commit -m "Update AssemblyInfo.cs to version $version" || echo "No changes"
+        git add .
+        git commit -m "Update AssemblyInfo version to ${{ github.event.inputs.version }}"
         git push
