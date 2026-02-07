@@ -75,6 +75,7 @@ jobs:
         } else {
             Write-Host "Found installer: $($installer.FullName)"
             Write-Host "INSTALLER_PATH=$($installer.FullName)" >> $env:GITHUB_ENV
+        }
 
     # 🔹 Update updater.json
     - name: Generate updater.json
