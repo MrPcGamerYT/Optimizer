@@ -19,7 +19,7 @@ jobs:
     - name: Sync AssemblyInfo version with update.json
       shell: pwsh
       run: |
-          $assemblyFile = "MyApp/Properties/AssemblyInfo.cs"
+          $assemblyFile = "Optimizer/Optimizer.csproj"
           Write-Host "Updating AssemblyInfo.cs with version $env:VERSION"
 
           # Replace AssemblyVersion and AssemblyFileVersion
