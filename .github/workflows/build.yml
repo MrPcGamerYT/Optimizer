@@ -1,4 +1,4 @@
-name: Build and Release v1
+name: Build and Release v2
 
 on:
   push:
@@ -12,19 +12,45 @@ jobs:
       contents: write
 
     steps:
-    # 🔹 Checkout code
+    # 1️⃣ Checkout code
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 🔹 Setup MSBuild
+    # 2️⃣ Setup MSBuild & NuGet
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
-
-    # 🔹 Setup NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # 🔹 Build Project
+    # 3️⃣ Read and increment version
+    - name: Generate new version
+      shell: pwsh
+      run: |
+        # Read current version from update.json
+        $updateJson = Get-Content update.json -Raw | ConvertFrom-Json
+        $currentVersion = $updateJson.version
+        Write-Host "Current version: $currentVersion"
+
+        # Increment patch number automatically
+        $parts = $currentVersion.Split(".") | ForEach-Object {[int]$_}
+        $parts[2] += 1  # increment patch
+        $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
+        Write-Host "New version: $newVersion"
+        Write-Host "VERSION=$newVersion" >> $env:GITHUB_ENV
+
+    # 4️⃣ Inject version into csproj
+    - name: Inject version into csproj
+      shell: pwsh
+      run: |
+        $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
+        Write-Host "Updating $projectFile with version $env:VERSION"
+        (Get-Content $projectFile) `
+          -replace '<Version>.*</Version>', "<Version>$env:VERSION</Version>" `
+          -replace '<FileVersion>.*</FileVersion>', "<FileVersion>$env:VERSION</FileVersion>" `
+          -replace '<AssemblyVersion>.*</AssemblyVersion>', "<AssemblyVersion>$env:VERSION</AssemblyVersion>" `
+          | Set-Content -Encoding UTF8 $projectFile
+
+    # 5️⃣ Build Project
     - name: Build Project
       shell: pwsh
       run: |
@@ -32,62 +58,48 @@ jobs:
         nuget restore "$projectFile"
         msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # 🔹 Build Installer
+    # 6️⃣ Build Installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 🔹 Debug Installer Output
-    - name: Debug Installer Output
+    # 7️⃣ Generate update.json
+    - name: Update update.json
       shell: pwsh
       run: |
-        Get-ChildItem -Recurse -Filter OptimizerSetup.exe
-
-    # 🧠 Generate updater.json & VERSION
-    - name: Generate updater.json
-      shell: pwsh
-      run: |
-        $runNumber = [int]$env:GITHUB_RUN_NUMBER
-        $major = 1
-        $minor = [math]::Floor($runNumber / 10000)
-        $build = [math]::Floor(($runNumber / 100) % 100)
-        $revision = $runNumber % 100
-        $version = "$major.$minor.$build.$revision"
-
-        Write-Host "VERSION=$version" >> $env:GITHUB_ENV
-
-        $json = @{
-            version = $version
-            url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
-        } | ConvertTo-Json -Compress
-
+        $json = @"
+        {
+          "version": "$env:VERSION",
+          "url": "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
+        }
+"@
         $json | Set-Content -Path update.json -Encoding UTF8
-        Write-Host "Generated update.json: $json"
+        Write-Host "update.json updated: $json"
 
-    # 🔹 Commit updater.json changes
-    - name: Commit updater.json
+    # 8️⃣ Commit update.json
+    - name: Commit update.json
       shell: pwsh
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add update.json
-        git commit -m "Update update.json to $env:VERSION" || echo "No changes"
+        git commit -m "Auto-update update.json to $env:VERSION" || echo "No changes"
         git push
 
-    # 🚀 Create Release
+    # 9️⃣ Create GitHub Release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: Optimizer
-        name: Release OptimizerSetup
+        tag_name: "v$env:VERSION"
+        name: "Release v$env:VERSION"
         files: setup_output/OptimizerSetup.exe
         make_latest: true
         fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 🧹 Delete old releases (keep latest)
+    # 🔟 Optional: Delete old releases (keep latest)
     - name: Delete old releases
       shell: pwsh
       env:
