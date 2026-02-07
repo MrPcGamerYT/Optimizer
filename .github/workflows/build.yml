@@ -1,109 +1,23 @@
-name: Build and Release with updater.json version
+name: Build Project
 
 on:
-  push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+  workflow_dispatch:   # Manual trigger
 
 jobs:
   build:
     runs-on: windows-latest
-    permissions:
-      contents: write
 
     steps:
-    # 1️⃣ Checkout repo
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 2️⃣ Read version from updater.json
-    - name: Read updater.json version
-      shell: pwsh
-      run: |
-        $jsonPath = "update.json"
-        if (-not (Test-Path $jsonPath)) {
-          Write-Error "update.json not found!"
-          exit 1
-        }
-
-        $json = Get-Content $jsonPath | ConvertFrom-Json
-        $version = $json.version
-
-        if ([string]::IsNullOrWhiteSpace($version)) {
-          Write-Error "Version in update.json is empty!"
-          exit 1
-        }
-
-        # Validate format
-        if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
-          Write-Error "Version '$version' is not in major.minor.build.revision format!"
-          exit 1
-        }
-
-        Write-Host "Updater version: $version"
-        Write-Host "APP_VERSION=$version" >> $env:GITHUB_ENV
-
-    # 3️⃣ Generate AssemblyInfo.cs with updater.json version
-    - name: Generate AssemblyInfo.cs
-      shell: pwsh
-      run: |
-        $version = $env:APP_VERSION
-        $assemblyPath = "Optimizer/Properties/AssemblyInfo.cs"
-
-        Write-Host "Generating AssemblyInfo.cs with version $version"
-
-        $content = @"
-        using System.Reflection;
-        using System.Runtime.CompilerServices;
-        using System.Runtime.InteropServices;
-
-        // General Information about an assembly
-        assembly: AssemblyTitle("Optimizer")]
-        [assembly: AssemblyDescription("System Optimizer Tool")]
-        [assembly: AssemblyConfiguration("")]
-        [assembly: AssemblyCompany("YoyTuber")]
-        [assembly: AssemblyProduct("Optimizer")]
-        [assembly: AssemblyCopyright("© 2026 Mr.Pc Gamer. All Rights Reserved.")]
-        [assembly: AssemblyTrademark("")]
-        [assembly: AssemblyCulture("")]
-
-        // COM visibility
-        [assembly: ComVisible(false)]
-
-        // GUID for typelib
-        [assembly: Guid("08e58f25-5dd2-42fe-833a-23ad7133b493")]
-
-        // Version info
-        [assembly: AssemblyVersion("$version")]
-        [assembly: AssemblyFileVersion("$version")]
-        "@
-
-        # Ensure directory exists
-        $dir = Split-Path $assemblyPath -Parent
-        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
-
-        $content | Set-Content -Path $assemblyPath -Encoding UTF8
-
-    # 4️⃣ Commit the new AssemblyInfo.cs
-    - name: Commit updated AssemblyInfo.cs
-      shell: pwsh
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        git add "Optimizer/Properties/AssemblyInfo.cs"
-        git commit -m "Update AssemblyInfo.cs to version $env:APP_VERSION" || echo "No changes"
-        git push
-
-    # 5️⃣ Setup MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 6️⃣ Setup NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # 7️⃣ Restore NuGet packages and build project
-    - name: Build Project
+    - name: Restore NuGet packages and Build Project
       shell: pwsh
       run: |
         $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
@@ -115,25 +29,11 @@ jobs:
         Write-Host "Building project..."
         msbuild $projectFile /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # 8️⃣ Build Installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 9️⃣ Debug Installer
-    - name: Debug Installer Output
+    - name: Debug Installer
       shell: pwsh
       run: Get-ChildItem -Recurse -Filter OptimizerSetup.exe
-
-    # 🔟 Create GitHub release
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.APP_VERSION }}
-        name: Release OptimizerSetup ${{ env.APP_VERSION }}
-        files: setup_output/OptimizerSetup.exe
-        make_latest: true
-        fail_on_unmatched_files: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
