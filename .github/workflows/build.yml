@@ -12,19 +12,19 @@ jobs:
       contents: write
 
     steps:
-    # Checkout code
+    # 🔹 Checkout code
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # Setup MSBuild
+    # 🔹 Setup MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # Setup NuGet
+    # 🔹 Setup NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # Calculate version
+    # 🔹 Calculate Version
     - name: Calculate Version
       id: version
       shell: pwsh
@@ -38,7 +38,7 @@ jobs:
         Write-Host "VERSION=$version" >> $env:GITHUB_ENV
         Write-Host "Calculated version: $version"
 
-    # Update csproj version
+    # 🔹 Update csproj Version
     - name: Update csproj Version
       shell: pwsh
       run: |
@@ -48,14 +48,14 @@ jobs:
           -replace '<Version>.*</Version>', "<Version>$env:VERSION</Version>" | Set-Content $projectFile
         Write-Host "Updated csproj to version $env:VERSION"
 
-    # Update Inno Setup version
+    # 🔹 Update Inno Setup Version
     - name: Update Inno Setup Version
       shell: pwsh
       run: |
         $issFile = "installer.iss"
         $content = Get-Content $issFile
 
-        # Replace AppVerName
+        # Replace or add AppVerName
         if ($content -match '^AppVerName=.*') {
             $content = $content -replace '^AppVerName=.*', "AppVerName=Optimizer $env:VERSION"
         } else {
@@ -63,7 +63,7 @@ jobs:
             $content = $content[0..($index-1)] + "AppVerName=Optimizer $env:VERSION" + $content[$index..($content.Length-1)]
         }
 
-        # Replace VersionInfoVersion
+        # Replace or add VersionInfoVersion
         if ($content -match '^VersionInfoVersion=.*') {
             $content = $content -replace '^VersionInfoVersion=.*', "VersionInfoVersion=$env:VERSION"
         } else {
@@ -73,7 +73,7 @@ jobs:
         $content | Set-Content $issFile -Encoding UTF8
         Write-Host "Updated installer version to $env:VERSION"
 
-    # Build project
+    # 🔹 Build Project
     - name: Build Project
       shell: pwsh
       run: |
@@ -81,24 +81,23 @@ jobs:
         nuget restore "$projectFile"
         msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # Build installer
+    # 🔹 Build Installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # Find installer
-    - name: Find Installer
-      id: find_installer
+    # 🔹 Copy installer to workspace root
+    - name: Copy Installer for Release
       shell: pwsh
       run: |
         $installer = Get-ChildItem -Recurse -Filter OptimizerSetup.exe | Select-Object -First 1
         if (-not $installer) { throw "OptimizerSetup.exe not found!" }
-        $relative = $installer.FullName.Replace("${env:GITHUB_WORKSPACE}\", "").Replace('\','/')
-        Write-Host "INSTALLER_PATH=$relative" >> $env:GITHUB_ENV
-        Write-Host "Installer found at $relative"
+        Copy-Item $installer.FullName "${{ github.workspace }}/OptimizerSetup.exe" -Force
+        Write-Host "INSTALLER_PATH=OptimizerSetup.exe" >> $env:GITHUB_ENV
+        Write-Host "Installer copied to workspace root"
 
-    # Generate update.json
+    # 🔹 Generate update.json
     - name: Generate update.json
       shell: pwsh
       run: |
@@ -109,7 +108,7 @@ jobs:
         $json | Set-Content -Path update.json -Encoding UTF8
         Write-Host "Generated update.json: $json"
 
-    # Commit update.json
+    # 🔹 Commit update.json
     - name: Commit update.json
       shell: pwsh
       run: |
@@ -119,19 +118,19 @@ jobs:
         git commit -m "Auto update update.json to $env:VERSION" || echo "No changes to commit"
         git push
 
-    # Create GitHub release
+    # 🔹 Create GitHub Release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "v${{ env.VERSION }}"
         name: "Release v${{ env.VERSION }}"
-        files: "${{ env.INSTALLER_PATH }}"
+        files: "OptimizerSetup.exe"
         make_latest: true
         fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # Delete old releases (keep latest)
+    # 🔹 Delete old releases (keep latest)
     - name: Delete old releases
       shell: pwsh
       env:
@@ -145,4 +144,3 @@ jobs:
           }
         } else {
           Write-Host "No old releases to delete."
-        }
