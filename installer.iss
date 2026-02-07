@@ -1,6 +1,6 @@
 [Setup]
 AppName=Optimizer
-AppVersion=1.0.0
+AppVerName=Optimizer 1.0.0        ; <-- initial version, workflow will replace
 DefaultDirName={autopf}\Optimizer
 DefaultGroupName=Optimizer
 UninstallDisplayIcon={app}\Optimizer.exe
