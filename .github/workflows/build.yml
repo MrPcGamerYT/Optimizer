@@ -1,4 +1,4 @@
-name: Build and Release v3
+name: Build and Release v1
 
 on:
   push:
@@ -12,26 +12,46 @@ jobs:
       contents: write
 
     steps:
-    # 1️⃣ Checkout code
+    # 🔹 Checkout code
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 2️⃣ Setup MSBuild & NuGet
+    # 🔹 Setup MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
+
+    # 🔹 Setup NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # 3️⃣ Read version from update.json
-    - name: Read update.json version
+    # 🧠 Read and update version from update.json
+    - name: Generate version and update update.json
       shell: pwsh
       run: |
-        $updateJson = Get-Content update.json -Raw | ConvertFrom-Json
-        $version = $updateJson.version
-        Write-Host "VERSION=$version" >> $env:GITHUB_ENV
-        Write-Host "Version from update.json: $version"
+        # Read existing update.json
+        if (Test-Path update.json) {
+            $updateJson = Get-Content update.json -Raw | ConvertFrom-Json
+            $currentVersion = if ($updateJson.version) { $updateJson.version } else { "1.0.0" }
+        } else {
+            $currentVersion = "1.0.0"
+        }
 
-    # 4️⃣ Build Project with version override
+        # Increment patch version automatically
+        $parts = $currentVersion.Split(".") | ForEach-Object {[int]$_}
+        $parts[2] += 1
+        $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
+        Write-Host "VERSION=$newVersion" >> $env:GITHUB_ENV
+        Write-Host "New version: $newVersion"
+
+        # Create/update update.json
+        $jsonObject = @{
+            version = $newVersion
+            url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
+        }
+        $jsonObject | ConvertTo-Json -Compress | Set-Content -Path update.json -Encoding UTF8
+        Write-Host "update.json updated: $($jsonObject | ConvertTo-Json -Compress)"
+
+    # 🔹 Build Project with version override
     - name: Build Project
       shell: pwsh
       run: |
@@ -46,30 +66,52 @@ jobs:
           /p:AssemblyVersion=$env:VERSION `
           /p:InformationalVersion=$env:VERSION
 
-    # 5️⃣ Build Installer
+    # 🔹 Build Installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 6️⃣ Optional: Commit update.json if you changed it
+    # 🔹 Debug Installer Output
+    - name: Debug Installer Output
+      shell: pwsh
+      run: |
+        Get-ChildItem -Recurse -Filter OptimizerSetup.exe
+
+    # 🔹 Commit update.json
     - name: Commit update.json
       shell: pwsh
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add update.json
-        git commit -m "Ensure update.json version is $env:VERSION" || echo "No changes"
+        git commit -m "Auto-update update.json to $env:VERSION" || echo "No changes"
         git push
 
-    # 7️⃣ Create Release
+    # 🚀 Create GitHub Release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "v$env:VERSION"
-        name: "Release v$env:VERSION"
-        files: publish/Optimizer.exe
+        name: "Release OptimizerSetup v$env:VERSION"
+        files: publish/OptimizerSetup.exe
         make_latest: true
         fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # 🧹 Delete old releases (keep latest)
+    - name: Delete old releases
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        $tags = gh release list --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
+        if ($tags) {
+          foreach ($tag in $tags) {
+            Write-Host "Deleting release: $tag"
+            gh release delete $tag -y --cleanup-tag
+          }
+        } else {
+          Write-Host "No old releases to delete."
+        }
