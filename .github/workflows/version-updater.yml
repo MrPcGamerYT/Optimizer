@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Project version (example: 1.0.1)"
+        description: "Project version (example: 1.0.1 or 1.0.1.0)"
         required: true
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 1️⃣ Generate update.json using the SAME version
+    # 1️⃣ Generate update.json
     - name: Generate update.json
       shell: pwsh
       run: |
@@ -40,22 +40,25 @@ jobs:
         git commit -m "Update update.json to ${{ github.event.inputs.version }}" || echo "No changes"
         git push
 
-    # 2️⃣ Update AssemblyInfo.cs with SAME version
+    # 2️⃣ Update AssemblyInfo.cs
     - name: Update AssemblyInfo.cs
       shell: powershell
       run: |
         $version = "${{ github.event.inputs.version }}"
-        $file = Get-ChildItem -Recurse -Filter "AssemblyInfo.cs" | Select-Object -First 1
+
+        $file = Get-ChildItem -Recurse -Filter "AssemblyInfo.cs" -File | Select-Object -First 1
 
         if (-not $file) {
           Write-Error "AssemblyInfo.cs not found!"
           exit 1
         }
 
-        (Get-Content $file) `
+        Write-Host "Found AssemblyInfo at $($file.FullName)"
+
+        (Get-Content $file.FullName) `
           -replace '\[assembly:\s*AssemblyVersion\(".*?"\)\]', "[assembly: AssemblyVersion(`"$version`")]" `
           -replace '\[assembly:\s*AssemblyFileVersion\(".*?"\)\]', "[assembly: AssemblyFileVersion(`"$version`")]" |
-        Set-Content $file
+        Set-Content $file.FullName -Encoding UTF8
 
         Write-Host "Updated AssemblyInfo.cs to version $version"
 
