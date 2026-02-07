@@ -1,39 +1,104 @@
-name: Build Project
+name: Build and Release v1
 
 on:
-  workflow_dispatch:   # Manual trigger
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
+    # 🔹 Checkout code
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    # 🔹 Setup MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
+    # 🔹 Setup NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    - name: Restore NuGet packages and Build Project
+    # 🔹 Build Project
+    - name: Build Project
       shell: pwsh
       run: |
         $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
-        $solutionDir = Split-Path $projectFile -Parent
+        nuget restore "$projectFile"
+        msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-        Write-Host "Restoring NuGet packages..."
-        nuget restore $projectFile -SolutionDirectory $solutionDir
-
-        Write-Host "Building project..."
-        msbuild $projectFile /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
-
+    # 🔹 Build Installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    - name: Debug Installer
+    # 🔹 Debug Installer Output
+    - name: Debug Installer Output
       shell: pwsh
-      run: Get-ChildItem -Recurse -Filter OptimizerSetup.exe
+      run: |
+        Get-ChildItem -Recurse -Filter OptimizerSetup.exe
+
+    # 🧠 Generate updater.json & VERSION
+    - name: Generate updater.json
+      shell: pwsh
+      run: |
+        $runNumber = [int]$env:GITHUB_RUN_NUMBER
+        $major = 1
+        $minor = [math]::Floor($runNumber / 10000)
+        $build = [math]::Floor(($runNumber / 100) % 100)
+        $revision = $runNumber % 100
+        $version = "$major.$minor.$build.$revision"
+
+        Write-Host "VERSION=$version" >> $env:GITHUB_ENV
+
+        $json = @{
+            version = $version
+            url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
+        } | ConvertTo-Json -Compress
+
+        $json | Set-Content -Path update.json -Encoding UTF8
+        Write-Host "Generated update.json: $json"
+
+    # 🔹 Commit updater.json changes
+    - name: Commit updater.json
+      shell: pwsh
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add update.json
+        git commit -m "Update update.json to $env:VERSION" || echo "No changes"
+        git push
+
+    # 🚀 Create Release
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: Optimizer
+        name: Release OptimizerSetup
+        files: setup_output/OptimizerSetup.exe
+        make_latest: true
+        fail_on_unmatched_files: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # 🧹 Delete old releases (keep latest)
+    - name: Delete old releases
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        $tags = gh release list --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
+        if ($tags) {
+          foreach ($tag in $tags) {
+            Write-Host "Deleting release: $tag"
+            gh release delete $tag -y --cleanup-tag
+          }
+        } else {
+          Write-Host "No old releases to delete."
+        }
