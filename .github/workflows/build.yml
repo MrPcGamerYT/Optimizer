@@ -15,51 +15,75 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    # 1️⃣ Read version from update.json
+    - name: Read version from update.json
+      id: version
+      shell: pwsh
+      run: |
+        $json = Get-Content update.json | ConvertFrom-Json
+        $version = $json.version
+        echo "VERSION=$version" >> $env:GITHUB_ENV
+        echo "TAG=v$version" >> $env:GITHUB_ENV
+        Write-Host "Version: $version"
+        Write-Host "Tag: v$version"
+
+    # 2️⃣ Check if tag already exists
+    - name: Check if release tag exists
+      id: check_tag
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $tag = "${{ env.TAG }}"
+        $exists = gh release view $tag 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "Release $tag already exists"
+          echo "EXISTS=true" >> $env:GITHUB_ENV
+        } else {
+          Write-Host "Release $tag does not exist"
+          echo "EXISTS=false" >> $env:GITHUB_ENV
+        }
+
+    # ⛔ Stop job if release already exists
+    - name: Skip build (release exists)
+      if: env.EXISTS == 'true'
+      run: |
+        Write-Host "Skipping build & release — version already published."
+        exit 0
+
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
+    # 3️⃣ Build project
     - name: Build Project
       shell: pwsh
       run: |
-        $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
-        nuget restore "$projectFile"
-        msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
+        $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" -File | Select-Object -First 1
+        nuget restore $projectFile.FullName
+        msbuild $projectFile.FullName /p:Configuration=Release /p:Platform="Any CPU"
 
+    # 4️⃣ Build installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    - name: Debug Installer Output
+    - name: Verify Installer
       shell: pwsh
       run: |
         Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
-    - name: Create Release
+    # 5️⃣ Create release using update.json version
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: Optimizer
-        name: Release OptimizerSetup
+        tag_name: ${{ env.TAG }}
+        name: Optimizer ${{ env.TAG }}
         files: setup_output/OptimizerSetup.exe
         make_latest: true
-        fail_on_unmatched_files: true
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Delete old releases (keep latest)
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      run: |
-        $tags = gh release list --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
-        if ($tags) {
-          foreach ($tag in $tags) {
-            Write-Host "Deleting release: $tag"
-            gh release delete $tag -y --cleanup-tag
-          }
-        } else {
-          Write-Host "No old releases to delete."
-        }
+        GITHUB_TOKEN: ${{ github.token }}
