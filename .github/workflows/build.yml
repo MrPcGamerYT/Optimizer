@@ -1,4 +1,4 @@
-name: Build and Release with dynamic AssemblyInfo
+name: Build and Release with updater.json version
 
 on:
   push:
@@ -12,11 +12,11 @@ jobs:
       contents: write
 
     steps:
-    # 1️⃣ Checkout code
+    # 1️⃣ Checkout repo
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 2️⃣ Read updater.json version
+    # 2️⃣ Read version from updater.json
     - name: Read updater.json version
       shell: pwsh
       run: |
@@ -34,7 +34,7 @@ jobs:
           exit 1
         }
 
-        # Validate version format
+        # Validate format
         if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
           Write-Error "Version '$version' is not in major.minor.build.revision format!"
           exit 1
@@ -43,7 +43,7 @@ jobs:
         Write-Host "Updater version: $version"
         Write-Host "APP_VERSION=$version" >> $env:GITHUB_ENV
 
-    # 3️⃣ Generate AssemblyInfo.cs dynamically
+    # 3️⃣ Generate AssemblyInfo.cs with updater.json version
     - name: Generate AssemblyInfo.cs
       shell: pwsh
       run: |
@@ -58,7 +58,7 @@ jobs:
         using System.Runtime.InteropServices;
 
         // General Information about an assembly
-        [assembly: AssemblyTitle("Optimizer")]
+        assembly: AssemblyTitle("Optimizer")]
         [assembly: AssemblyDescription("System Optimizer Tool")]
         [assembly: AssemblyConfiguration("")]
         [assembly: AssemblyCompany("YoyTuber")]
@@ -84,15 +84,25 @@ jobs:
 
         $content | Set-Content -Path $assemblyPath -Encoding UTF8
 
-    # 4️⃣ Setup MSBuild
+    # 4️⃣ Commit the new AssemblyInfo.cs
+    - name: Commit updated AssemblyInfo.cs
+      shell: pwsh
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add "Optimizer/Properties/AssemblyInfo.cs"
+        git commit -m "Update AssemblyInfo.cs to version $env:APP_VERSION" || echo "No changes"
+        git push
+
+    # 5️⃣ Setup MSBuild
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 5️⃣ Setup NuGet
+    # 6️⃣ Setup NuGet
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # 6️⃣ Restore packages and Build EXE
+    # 7️⃣ Restore NuGet packages and build project
     - name: Build Project
       shell: pwsh
       run: |
@@ -105,18 +115,18 @@ jobs:
         Write-Host "Building project..."
         msbuild $projectFile /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
 
-    # 7️⃣ Build Installer
+    # 8️⃣ Build Installer
     - name: Build Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: installer.iss
 
-    # 8️⃣ Debug EXE output
+    # 9️⃣ Debug Installer
     - name: Debug Installer Output
       shell: pwsh
       run: Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
-    # 9️⃣ Create Release
+    # 🔟 Create GitHub release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
