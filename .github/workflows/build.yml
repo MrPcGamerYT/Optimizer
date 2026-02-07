@@ -32,7 +32,7 @@ jobs:
     
         # Update csproj version with the updater.json version
         [xml]$csproj = Get-Content $projectFile
-         $csproj.Project.PropertyGroup.Version = $env:VERSION
+        $csproj.Project.PropertyGroup.Version = $env:VERSION
         $csproj.Project.PropertyGroup.FileVersion = $env:VERSION
         $csproj.Project.PropertyGroup.AssemblyVersion = $env:VERSION
         $csproj.Save($projectFile)
