@@ -1,73 +1,59 @@
-name: Update Project Version
+name: Version Update
 
 on:
   workflow_dispatch:
 
 jobs:
-  update-version:
+  increment_version:
     runs-on: windows-latest
-    permissions:
-      contents: write
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Read version from updater.json
+    - name: Setup PowerShell
+      uses: actions/setup-powershell@v2
+
+    - name: Increment Version and Update Files
       shell: pwsh
       run: |
-        $jsonPath = "update.json"
-        if (-not (Test-Path $jsonPath)) { Write-Error "update.json not found!"; exit 1 }
-        $json = Get-Content $jsonPath | ConvertFrom-Json
-        $version = $json.version
-        if ([string]::IsNullOrWhiteSpace($version)) { Write-Error "Version is empty!"; exit 1 }
-        Write-Host "APP_VERSION=$version" >> $env:GITHUB_ENV
+        # Path to AssemblyInfo.cs
+        $assemblyInfoPath = "$(Get-ChildItem -Recurse -Filter AssemblyInfo.cs | Select-Object -First 1).FullName"
 
-    - name: Update AssemblyInfo.cs
-      shell: pwsh
-      run: |
-        $assemblyPath = "Optimizer/Properties/AssemblyInfo.cs"
-        if (-not (Test-Path $assemblyPath)) { Write-Error "AssemblyInfo.cs not found!"; exit 1 }
-        $version = $env:APP_VERSION
-        $lines = Get-Content $assemblyPath
+        # Read current version from AssemblyInfo.cs
+        $assemblyContent = Get-Content $assemblyInfoPath
+        $versionLine = $assemblyContent | Where-Object { $_ -match 'AssemblyVersion' }
+        $currentVersion = ($versionLine -split '"')[1]
 
-        # Update AssemblyVersion and AssemblyFileVersion
-        $lines = $lines | ForEach-Object {
-            if ($_ -match 'AssemblyVersion\(".*"\)') { "[assembly: AssemblyVersion(`"$version`")]" }
-            elseif ($_ -match 'AssemblyFileVersion\(".*"\)') { "[assembly: AssemblyFileVersion(`"$version`")]" }
-            else { $_ }
+        # Split current version into components
+        $versionParts = $currentVersion.Split('.')
+        $major = [int]$versionParts[0]
+        $minor = [int]$versionParts[1]
+        $build = [int]$versionParts[2] + 1  # Increment the build number
+        $revision = [int]$versionParts[3]
+
+        # Construct new version
+        $newVersion = "$major.$minor.$build.$revision"
+
+        # Update AssemblyInfo.cs with the new version
+        $assemblyContent = $assemblyContent | ForEach-Object {
+          $_ -replace 'AssemblyVersion\(".*"\)', "AssemblyVersion(`"$newVersion`")"
         }
+        $assemblyContent | Set-Content $assemblyInfoPath
 
-        # Save back
-        $lines | Set-Content $assemblyPath -Encoding UTF8
-        Write-Host "AssemblyInfo.cs updated to version $version"
-
-    - name: Update csproj AssemblyVersion/FileVersion if exist
-      shell: pwsh
-      run: |
-        $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
-        [xml]$csproj = Get-Content $projectFile
-
-        function Set-OrCreateNode($parent, $name, $value) {
-            $node = $parent.SelectSingleNode($name)
-            if ($node) { $node.InnerText = $value }
+        # Update updater.json with the new version
+        $json = @{
+          version = $newVersion
+          url = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
         }
+        $json | ConvertTo-Json -Compress | Set-Content update.json -Encoding UTF8
 
-        # Only update existing nodes, do NOT create <Version> for .NET Framework
-        $pg = $csproj.Project.PropertyGroup[0]
+        Write-Host "Updated version to $newVersion"
 
-        Set-OrCreateNode $pg "AssemblyVersion" $env:APP_VERSION
-        Set-OrCreateNode $pg "FileVersion" $env:APP_VERSION
-
-        $csproj.Save($projectFile)
-        Write-Host "$projectFile AssemblyVersion/FileVersion updated to $env:APP_VERSION"
-
-    - name: Commit updated files
-      shell: pwsh
+    - name: Commit changes
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
-        git add Optimizer/Properties/AssemblyInfo.cs
-        git add *.csproj
-        git commit -m "Update AssemblyInfo.cs and .csproj to version $env:APP_VERSION" || echo "No changes"
+        git add AssemblyInfo.cs update.json
+        git commit -m "Increment version to $newVersion"
         git push
