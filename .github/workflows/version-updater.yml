@@ -13,17 +13,6 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 1️⃣ Read version from update.json
-    - name: Read version from update.json
-      shell: pwsh
-      run: |
-        $jsonPath = "update.json"
-        if (-not (Test-Path $jsonPath)) { Write-Error "update.json not found!"; exit 1 }
-        $json = Get-Content $jsonPath | ConvertFrom-Json
-        $version = 1.0.1
-        if ([string]::IsNullOrWhiteSpace($version)) { Write-Error "Version is empty!"; exit 1 }
-        Write-Host "APP_VERSION=$version" >> $env:GITHUB_ENV
-
     # 2️⃣ Update AssemblyInfo.cs with the new version
     - name: Update AssemblyInfo.cs
       shell: pwsh
