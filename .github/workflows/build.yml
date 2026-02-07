@@ -24,13 +24,38 @@ jobs:
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
 
-    # 🔹 Build Project
+    # 🔹 Build Project with version override
     - name: Build Project
       shell: pwsh
       run: |
+        # Get project file
         $projectFile = Get-ChildItem -Recurse -Filter "*.csproj" | Select-Object -First 1 -ExpandProperty FullName
         nuget restore "$projectFile"
-        msbuild "$projectFile" /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="${{ github.workspace }}\publish\"
+
+        # Compute version automatically (patch increment)
+        if (Test-Path update.json) {
+            $updateJson = Get-Content update.json -Raw | ConvertFrom-Json
+            $currentVersion = if ($updateJson.version) { $updateJson.version } else { "1.0.0" }
+        } else {
+            $currentVersion = "1.0.0"
+        }
+
+        $parts = $currentVersion.Split(".") | ForEach-Object {[int]$_}
+        $parts[2] += 1  # increment patch
+        $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
+
+        Write-Host "VERSION=$newVersion" >> $env:GITHUB_ENV
+        Write-Host "New app version: $newVersion"
+
+        # Build project and inject version
+        msbuild "$projectFile" `
+          /p:Configuration=Release `
+          /p:Platform="Any CPU" `
+          /p:OutputPath="${{ github.workspace }}\publish\" `
+          /p:Version=$env:VERSION `
+          /p:FileVersion=$env:VERSION `
+          /p:AssemblyVersion=$env:VERSION `
+          /p:InformationalVersion=$env:VERSION
 
     # 🔹 Build Installer
     - name: Build Installer
@@ -51,38 +76,28 @@ jobs:
             Write-Host "Found installer: $($installer.FullName)"
             Write-Host "INSTALLER_PATH=$($installer.FullName)" >> $env:GITHUB_ENV
 
-    # 🧠 Generate updater.json & VERSION
+    # 🔹 Update updater.json
     - name: Generate updater.json
       shell: pwsh
       run: |
-        $runNumber = [int]$env:GITHUB_RUN_NUMBER
-        $major = 1
-        $minor = [math]::Floor($runNumber / 10000)
-        $build = [math]::Floor(($runNumber / 100) % 100)
-        $revision = $runNumber % 100
-        $version = "$major.$minor.$build.$revision"
-
-        Write-Host "VERSION=$version" >> $env:GITHUB_ENV
-
         $json = @{
-            version = $version
+            version = $env:VERSION
             url     = "https://github.com/MrPcGamerYT/Optimizer/releases/latest/download/OptimizerSetup.exe"
-        } | ConvertTo-Json -Compress
+        }
+        $json | ConvertTo-Json -Compress | Set-Content -Path update.json -Encoding UTF8
+        Write-Host "update.json updated with version $env:VERSION"
 
-        $json | Set-Content -Path update.json -Encoding UTF8
-        Write-Host "Generated update.json: $json"
-
-    # 🔹 Commit updater.json changes
-    - name: Commit updater.json
+    # 🔹 Commit updater.json
+    - name: Commit update.json
       shell: pwsh
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add update.json
-        git commit -m "Update update.json to $env:VERSION" || echo "No changes"
+        git commit -m "Auto-update update.json to $env:VERSION" || echo "No changes"
         git push
 
-    # 🚀 Create GitHub Release with EXE
+    # 🚀 Create GitHub Release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -94,7 +109,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 🧹 Delete old releases (keep latest)
+    # 🧹 Delete old releases
     - name: Delete old releases
       shell: pwsh
       env:
