@@ -6,7 +6,7 @@ DefaultGroupName=Optimizer
 UninstallDisplayIcon={app}\Optimizer.exe
 Compression=lzma
 SolidCompression=yes
-OutputDir=setup_output
+OutputDir={src}\publish
 OutputBaseFilename=OptimizerSetup
 
 ; --- PUBLISHER DETAILS ---
