@@ -1,4 +1,4 @@
-name: Update Project Version
+name: Update Version
 
 on:
   workflow_dispatch:
