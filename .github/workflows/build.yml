@@ -1,4 +1,4 @@
-name: Build and Release Using updater.json Version
+name: Build and Release with dynamic AssemblyInfo
 
 on:
   push:
@@ -12,17 +12,17 @@ jobs:
       contents: write
 
     steps:
-    # 1️⃣ Checkout repo
+    # 1️⃣ Checkout code
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 2️⃣ Read version from update.json
+    # 2️⃣ Read updater.json version
     - name: Read updater.json version
       shell: pwsh
       run: |
         $jsonPath = "update.json"
         if (-not (Test-Path $jsonPath)) {
-          Write-Error "update.json not found! Please create it first."
+          Write-Error "update.json not found!"
           exit 1
         }
 
@@ -30,32 +30,59 @@ jobs:
         $version = $json.version
 
         if ([string]::IsNullOrWhiteSpace($version)) {
-          Write-Error "Version is empty in update.json!"
+          Write-Error "Version in update.json is empty!"
+          exit 1
+        }
+
+        # Validate version format
+        if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+          Write-Error "Version '$version' is not in major.minor.build.revision format!"
           exit 1
         }
 
         Write-Host "Updater version: $version"
         Write-Host "APP_VERSION=$version" >> $env:GITHUB_ENV
 
-    # 3️⃣ Update AssemblyInfo.cs version to match updater.json
-    - name: Update AssemblyInfo.cs
+    # 3️⃣ Generate AssemblyInfo.cs dynamically
+    - name: Generate AssemblyInfo.cs
       shell: pwsh
       run: |
-        $assemblyFile = "Optimizer/Properties/AssemblyInfo.cs"
-        if (-not (Test-Path $assemblyFile)) {
-          Write-Error "AssemblyInfo.cs not found!"
-          exit 1
-        }
-
         $version = $env:APP_VERSION
-        Write-Host "Updating AssemblyInfo.cs version to $version"
+        $assemblyPath = "Optimizer/Properties/AssemblyInfo.cs"
 
-        (Get-Content $assemblyFile) `
-          -replace 'AssemblyVersion\(".*"\)', "AssemblyVersion(`"$version`")" `
-          -replace 'AssemblyFileVersion\(".*"\)', "AssemblyFileVersion(`"$version`")" `
-          | Set-Content $assemblyFile
+        Write-Host "Generating AssemblyInfo.cs with version $version"
 
-        Write-Host "AssemblyInfo.cs updated successfully."
+        $content = @"
+        using System.Reflection;
+        using System.Runtime.CompilerServices;
+        using System.Runtime.InteropServices;
+
+        // General Information about an assembly
+        [assembly: AssemblyTitle("Optimizer")]
+        [assembly: AssemblyDescription("System Optimizer Tool")]
+        [assembly: AssemblyConfiguration("")]
+        [assembly: AssemblyCompany("YoyTuber")]
+        [assembly: AssemblyProduct("Optimizer")]
+        [assembly: AssemblyCopyright("© 2026 Mr.Pc Gamer. All Rights Reserved.")]
+        [assembly: AssemblyTrademark("")]
+        [assembly: AssemblyCulture("")]
+
+        // COM visibility
+        [assembly: ComVisible(false)]
+
+        // GUID for typelib
+        [assembly: Guid("08e58f25-5dd2-42fe-833a-23ad7133b493")]
+
+        // Version info
+        [assembly: AssemblyVersion("$version")]
+        [assembly: AssemblyFileVersion("$version")]
+        "@
+
+        # Ensure directory exists
+        $dir = Split-Path $assemblyPath -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+
+        $content | Set-Content -Path $assemblyPath -Encoding UTF8
 
     # 4️⃣ Setup MSBuild
     - name: Setup MSBuild
@@ -87,10 +114,9 @@ jobs:
     # 8️⃣ Debug EXE output
     - name: Debug Installer Output
       shell: pwsh
-      run: |
-        Get-ChildItem -Recurse -Filter OptimizerSetup.exe
+      run: Get-ChildItem -Recurse -Filter OptimizerSetup.exe
 
-    # 9️⃣ Create Release using manual version
+    # 9️⃣ Create Release
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -101,18 +127,3 @@ jobs:
         fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    # 🔟 Delete old releases (keep latest)
-    - name: Delete old releases
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        $tags = gh release list --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].tagName'
-        if ($tags) {
-          foreach ($tag in $tags) {
-            Write-Host "Deleting release: $tag"
-            gh release delete $tag -y --cleanup-tag
-          }
-        } else {
-          Write-Host "No old releases to delete."
