@@ -932,11 +932,11 @@ namespace Optimizer
                 bgAppBoostRunning;
 
             if (tgAdvancedEmulator.Checked)
-                trayIcon.Text = "Advanced Emulator Game Mode ACTIVE";
+                trayIcon.Text = "Advanced Emulator Mode ACTIVE 🕹";
             else if (tgAdvancedGame.Checked)
-                trayIcon.Text = "Advanced Game Mode ACTIVE";
+                trayIcon.Text = "Advanced Game Mode ACTIVE 🚀";
             else if (tgNormalGame.Checked)
-                trayIcon.Text = "Normal Game Mode ACTIVE";
+                trayIcon.Text = "Normal Game Mode ACTIVE 🎮";
             else
                 trayIcon.Text = "Game Mode OFF";
 
@@ -1880,6 +1880,11 @@ namespace Optimizer
         }
 
         private void label4_Click_1(object sender, EventArgs e)
+        {
+
+        }
+
+        private void label5_Click(object sender, EventArgs e)
         {
 
         }
