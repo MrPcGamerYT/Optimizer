@@ -141,6 +141,8 @@ namespace Optimizer
             this.guna2DragControl6 = new Guna.UI2.WinForms.Guna2DragControl(this.components);
             this.guna2DragControl7 = new Guna.UI2.WinForms.Guna2DragControl(this.components);
             this.guna2DragControl8 = new Guna.UI2.WinForms.Guna2DragControl(this.components);
+            this.tgAimOptimize = new Guna.UI2.WinForms.Guna2ToggleSwitch();
+            this.label25 = new System.Windows.Forms.Label();
             this.guna2Panel1.SuspendLayout();
             this.Homepnl.SuspendLayout();
             this.guna2Panel2.SuspendLayout();
@@ -1399,6 +1401,8 @@ namespace Optimizer
             // settingspnl
             // 
             this.settingspnl.BorderRadius = 15;
+            this.settingspnl.Controls.Add(this.tgAimOptimize);
+            this.settingspnl.Controls.Add(this.label25);
             this.settingspnl.Controls.Add(this.btnRestoreDefaults);
             this.settingspnl.Controls.Add(this.tgReduceAnimations);
             this.settingspnl.Controls.Add(this.tgMinimizeToTray);
@@ -1428,14 +1432,14 @@ namespace Optimizer
             this.btnRestoreDefaults.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(141)))), ((int)(((byte)(141)))), ((int)(((byte)(141)))));
             this.btnRestoreDefaults.FillColor = System.Drawing.Color.Transparent;
             this.btnRestoreDefaults.FillColor2 = System.Drawing.Color.Transparent;
-            this.btnRestoreDefaults.Font = new System.Drawing.Font("Orbitron", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnRestoreDefaults.Font = new System.Drawing.Font("Orbitron", 8.249999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnRestoreDefaults.ForeColor = System.Drawing.Color.White;
             this.btnRestoreDefaults.GradientMode = System.Drawing.Drawing2D.LinearGradientMode.Vertical;
             this.btnRestoreDefaults.HoverState.BorderColor = System.Drawing.Color.White;
-            this.btnRestoreDefaults.Location = new System.Drawing.Point(218, 83);
+            this.btnRestoreDefaults.Location = new System.Drawing.Point(547, 253);
             this.btnRestoreDefaults.Name = "btnRestoreDefaults";
             this.btnRestoreDefaults.PressedColor = System.Drawing.Color.Transparent;
-            this.btnRestoreDefaults.Size = new System.Drawing.Size(282, 34);
+            this.btnRestoreDefaults.Size = new System.Drawing.Size(162, 34);
             this.btnRestoreDefaults.TabIndex = 26;
             this.btnRestoreDefaults.Text = "Reset To Defaults Ssettings";
             this.btnRestoreDefaults.Click += new System.EventHandler(this.btnRestoreDefaults_Click);
@@ -1447,7 +1451,7 @@ namespace Optimizer
             this.tgReduceAnimations.CheckedState.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(94)))), ((int)(((byte)(148)))), ((int)(((byte)(255)))));
             this.tgReduceAnimations.CheckedState.InnerBorderColor = System.Drawing.Color.White;
             this.tgReduceAnimations.CheckedState.InnerColor = System.Drawing.Color.White;
-            this.tgReduceAnimations.Location = new System.Drawing.Point(540, 183);
+            this.tgReduceAnimations.Location = new System.Drawing.Point(540, 185);
             this.tgReduceAnimations.Name = "tgReduceAnimations";
             this.tgReduceAnimations.Size = new System.Drawing.Size(35, 20);
             this.tgReduceAnimations.TabIndex = 24;
@@ -1464,7 +1468,7 @@ namespace Optimizer
             this.tgMinimizeToTray.CheckedState.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(94)))), ((int)(((byte)(148)))), ((int)(((byte)(255)))));
             this.tgMinimizeToTray.CheckedState.InnerBorderColor = System.Drawing.Color.White;
             this.tgMinimizeToTray.CheckedState.InnerColor = System.Drawing.Color.White;
-            this.tgMinimizeToTray.Location = new System.Drawing.Point(540, 135);
+            this.tgMinimizeToTray.Location = new System.Drawing.Point(540, 137);
             this.tgMinimizeToTray.Name = "tgMinimizeToTray";
             this.tgMinimizeToTray.Size = new System.Drawing.Size(35, 20);
             this.tgMinimizeToTray.TabIndex = 23;
@@ -1480,7 +1484,7 @@ namespace Optimizer
             this.lblAdminStatus.BackColor = System.Drawing.Color.Transparent;
             this.lblAdminStatus.Font = new System.Drawing.Font("Orbitron", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblAdminStatus.ForeColor = System.Drawing.Color.White;
-            this.lblAdminStatus.Location = new System.Drawing.Point(195, 235);
+            this.lblAdminStatus.Location = new System.Drawing.Point(195, 242);
             this.lblAdminStatus.Name = "lblAdminStatus";
             this.lblAdminStatus.Size = new System.Drawing.Size(329, 44);
             this.lblAdminStatus.TabIndex = 21;
@@ -1493,7 +1497,7 @@ namespace Optimizer
             this.label13.BackColor = System.Drawing.Color.Transparent;
             this.label13.Font = new System.Drawing.Font("Orbitron", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.label13.ForeColor = System.Drawing.Color.White;
-            this.label13.Location = new System.Drawing.Point(143, 183);
+            this.label13.Location = new System.Drawing.Point(143, 185);
             this.label13.Name = "label13";
             this.label13.Size = new System.Drawing.Size(317, 22);
             this.label13.TabIndex = 18;
@@ -1505,7 +1509,7 @@ namespace Optimizer
             this.label12.BackColor = System.Drawing.Color.Transparent;
             this.label12.Font = new System.Drawing.Font("Orbitron", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.label12.ForeColor = System.Drawing.Color.White;
-            this.label12.Location = new System.Drawing.Point(143, 137);
+            this.label12.Location = new System.Drawing.Point(143, 139);
             this.label12.Name = "label12";
             this.label12.Size = new System.Drawing.Size(281, 22);
             this.label12.TabIndex = 17;
@@ -1820,16 +1824,45 @@ namespace Optimizer
             this.guna2DragControl8.TargetControl = this.guna2Separator1;
             this.guna2DragControl8.UseTransparentDrag = true;
             // 
+            // tgAimOptimize
+            // 
+            this.tgAimOptimize.BackColor = System.Drawing.Color.Transparent;
+            this.tgAimOptimize.CheckedState.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(94)))), ((int)(((byte)(148)))), ((int)(((byte)(255)))));
+            this.tgAimOptimize.CheckedState.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(94)))), ((int)(((byte)(148)))), ((int)(((byte)(255)))));
+            this.tgAimOptimize.CheckedState.InnerBorderColor = System.Drawing.Color.White;
+            this.tgAimOptimize.CheckedState.InnerColor = System.Drawing.Color.White;
+            this.tgAimOptimize.Location = new System.Drawing.Point(540, 92);
+            this.tgAimOptimize.Name = "tgAimOptimize";
+            this.tgAimOptimize.Size = new System.Drawing.Size(35, 20);
+            this.tgAimOptimize.TabIndex = 28;
+            this.tgAimOptimize.UncheckedState.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(137)))), ((int)(((byte)(149)))));
+            this.tgAimOptimize.UncheckedState.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(137)))), ((int)(((byte)(149)))));
+            this.tgAimOptimize.UncheckedState.InnerBorderColor = System.Drawing.Color.White;
+            this.tgAimOptimize.UncheckedState.InnerColor = System.Drawing.Color.White;
+            this.tgAimOptimize.CheckedChanged += new System.EventHandler(this.tgAimOptimize_CheckedChanged);
+            // 
+            // label25
+            // 
+            this.label25.AutoSize = true;
+            this.label25.BackColor = System.Drawing.Color.Transparent;
+            this.label25.Font = new System.Drawing.Font("Orbitron", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label25.ForeColor = System.Drawing.Color.White;
+            this.label25.Location = new System.Drawing.Point(143, 91);
+            this.label25.Name = "label25";
+            this.label25.Size = new System.Drawing.Size(145, 22);
+            this.label25.TabIndex = 27;
+            this.label25.Text = "Aim Optimize";
+            // 
             // Optimizer
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(34)))));
             this.ClientSize = new System.Drawing.Size(800, 403);
+            this.Controls.Add(this.settingspnl);
             this.Controls.Add(this.boostpnl);
             this.Controls.Add(this.Homepnl);
             this.Controls.Add(this.gamemodpnl);
-            this.Controls.Add(this.settingspnl);
             this.Controls.Add(this.Cleanerpnl);
             this.Controls.Add(this.infopnl);
             this.Controls.Add(this.guna2Panel1);
@@ -1988,6 +2021,8 @@ namespace Optimizer
         private Guna.UI2.WinForms.Guna2DragControl guna2DragControl8;
         private Guna.UI2.WinForms.Guna2ToggleSwitch tgAdvancedEmulator;
         private System.Windows.Forms.Label label9;
+        private Guna.UI2.WinForms.Guna2ToggleSwitch tgAimOptimize;
+        private System.Windows.Forms.Label label25;
     }
 }
 
