@@ -22,7 +22,7 @@ namespace Optimizer
 {
     public partial class Optimizer : Form
     {
-        // 🔁 Store original priorities
+                // 🔁 Store original priorities
         private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
         = new ConcurrentDictionary<int, ProcessPriorityClass>();
 
@@ -62,7 +62,22 @@ namespace Optimizer
         private CancellationTokenSource bgAppsCTS;
         private float currentOverall = 0;
         private int targetOverall = 0;
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SystemParametersInfo(
+    uint uiAction,
+    uint uiParam,
+    object pvParam,
+    uint fWinIni);
 
+        [DllImport("winmm.dll")]
+        private static extern uint timeBeginPeriod(uint uMilliseconds);
+
+        [DllImport("winmm.dll")]
+        private static extern uint timeEndPeriod(uint uMilliseconds);
+
+        private const uint SPI_SETMOUSE = 0x0004;
+        private const uint SPIF_UPDATEINIFILE = 0x01;
+        private const uint SPIF_SENDCHANGE = 0x02;
         private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
@@ -81,6 +96,113 @@ namespace Optimizer
     "fontdrvhost"
 };
 
+        private string[] gameProcesses =
+{
+    // 🔹 Emulators
+    "HD-Player",        // BlueStacks
+    "HD-Frontend",
+    "AndroidEmulator",  // LDPlayer
+    "dnplayer",
+    "LdVBoxHeadless",
+    "aow_exe",          // GameLoop
+    "Nox",
+    "NoxVMHandle",
+    "MEmu",
+    "MEmuHeadless",
+
+    // 🔹 Riot Games
+    "valorant",
+    "VALORANT-Win64-Shipping",
+    "LeagueClient",
+    "League of Legends",
+
+    // 🔹 CS / Valve
+    "cs2",
+    "csgo",
+    "hl2",
+    "steam",
+
+    // 🔹 Epic Games
+    "FortniteClient",
+    "FortniteClient-Win64-Shipping",
+    "EpicGamesLauncher",
+
+    // 🔹 Battle Royale
+    "TslGame",          // PUBG PC
+    "PUBG",
+    "pubg",
+    "ApexLegends",
+    "r5apex",
+
+    // 🔹 Call of Duty
+    "cod",
+    "codmw",
+    "codwarzone",
+    "ModernWarfare",
+    "BlackOpsColdWar",
+
+    // 🔹 Minecraft
+    "javaw",            // Minecraft Java
+    "Minecraft.Windows",
+
+    // 🔹 Roblox
+    "RobloxPlayerBeta",
+
+    // 🔹 GTA
+    "GTA5",
+    "PlayGTAV",
+
+    // 🔹 Forza
+    "ForzaHorizon5",
+    "ForzaHorizon4",
+
+    // 🔹 Racing
+    "NFSHeat",
+    "NeedForSpeedUnbound",
+
+    // 🔹 Ubisoft
+    "RainbowSix",
+    "RainbowSix_Vulkan",
+    "ACValhalla",
+
+    // 🔹 Battlefield
+    "bf1",
+    "bfv",
+    "bf2042",
+
+    // 🔹 Overwatch
+    "Overwatch",
+    "Overwatch2",
+
+    // 🔹 Destiny
+    "destiny2",
+
+    // 🔹 Escape from Tarkov
+    "EscapeFromTarkov",
+
+    // 🔹 The Finals
+    "Discovery",
+
+    // 🔹 Rust
+    "RustClient",
+
+    // 🔹 Warframe
+    "Warframe",
+
+    // 🔹 Genshin Impact
+    "GenshinImpact",
+    "YuanShen",
+
+    // 🔹 Honkai Star Rail
+    "StarRail",
+
+    // 🔹 Generic Unity / Unreal games
+    "Unity",
+    "UnityCrashHandler64",
+    "UnrealEngine",
+    "UE4",
+    "UE5"
+};
         private bool IsProtectedProcess(Process p)
         {
             try
@@ -1303,7 +1425,7 @@ namespace Optimizer
             this.MaximumSize = this.Size;
             this.MinimumSize = this.Size;
             lblVersion.Text = Application.ProductVersion; // ✅ SAFE HERE TOO
-
+            tgAimOptimize.Checked = Properties.Settings.Default.AimOptimize;
             gameExecutablesSet = new HashSet<string>(
             gameExecutables.Select(g => g.ToLower())
             );
@@ -2013,6 +2135,7 @@ namespace Optimizer
         {
             tgMinimizeToTray.Checked = false;
             tgReduceAnimations.Checked = false;
+            tgAimOptimize.Checked = false;
 
             Properties.Settings.Default.Reset();
             Properties.Settings.Default.Save();
@@ -2177,5 +2300,104 @@ namespace Optimizer
         {
 
         }
+
+        private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
+{
+    try
+    {
+        Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
+        Properties.Settings.Default.Save();
+
+        if (tgAimOptimize.Checked)
+        {
+            EnableProAimOptimization();
+            SetAdminStatus("Aim Optimization ENABLED 🎯", Color.Lime);
+        }
+        else
+        {
+            DisableProAimOptimization();
+            SetAdminStatus("Aim Optimization DISABLED ❌", Color.Orange);
+        }
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show("Aim Optimization Error:\n" + ex.Message);
+    }
+}
+
+private void EnableProAimOptimization()
+{
+    DisableMouseAcceleration();
+    BoostGameProcess();
+    OptimizeBackgroundProcesses();
+    timeBeginPeriod(1);
+}
+
+private void DisableProAimOptimization()
+{
+    RestoreMouseDefaults();
+    timeEndPeriod(1);
+}
+
+private void DisableMouseAcceleration()
+{
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "0");
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "0");
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "0");
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
+
+    ApplyMouseChanges();
+}
+
+private void RestoreMouseDefaults()
+{
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "1");
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "6");
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "10");
+    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
+
+    ApplyMouseChanges();
+}
+
+private void ApplyMouseChanges()
+{
+    SystemParametersInfo(
+        SPI_SETMOUSE,
+        0,
+        null,
+        SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+}
+private void BoostGameProcess()
+{
+    foreach (string name in gameProcesses)
+    {
+        Process[] processes = Process.GetProcessesByName(name);
+
+        foreach (Process p in processes)
+        {
+            try
+            {
+                p.PriorityClass = ProcessPriorityClass.High;
+            }
+            catch { }
+        }
+    }
+}
+private void OptimizeBackgroundProcesses()
+{
+    foreach (Process p in Process.GetProcesses())
+    {
+        try
+        {
+            if (!gameProcesses.Contains(p.ProcessName) &&
+                p.PriorityClass == ProcessPriorityClass.Normal)
+            {
+                p.PriorityClass = ProcessPriorityClass.BelowNormal;
+            }
+        }
+        catch { }
+    }
+}
+        
     }
 }
