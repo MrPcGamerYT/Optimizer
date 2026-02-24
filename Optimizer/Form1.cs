@@ -22,26 +22,42 @@ namespace Optimizer
 {
     public partial class Optimizer : Form
     {
-                // 🔁 Store original priorities
-        private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
-        = new ConcurrentDictionary<int, ProcessPriorityClass>();
+                // ================= PRIORITY STORAGE =================
 
-        // Should we remember the last panel? (toggle ON/OFF)
-        private bool rememberLastPanel = true; // user can change this later
+// Store original priorities safely
+private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
+    = new ConcurrentDictionary<int, ProcessPriorityClass>();
 
-        // Store the last visible panel's name
-        private string lastPanel = "homePnl"; // default panel at first start
+// Store original CPU affinity
+private readonly ConcurrentDictionary<int, IntPtr> originalAffinity
+    = new ConcurrentDictionary<int, IntPtr>();
 
-        // Storage alert tracking (add this)
-        private int lastAlertLevel = -1; // -1 = no alert shown yet
 
-        private void SetAdminStatus(string text, Color color)
-        {
-            lblAdminStatus.Text = text;
-            lblAdminStatus.ForeColor = color;
-        }
-        // ================= SYSTEM & OPTIMIZATION DECLARATIONS =================
+// ================= PANEL MEMORY =================
+
+// Should remember last panel
+private bool rememberLastPanel = true;
+
+// Last opened panel name
+private string lastPanel = "homePnl";
+
+// Storage alert tracking
+private int lastAlertLevel = -1;
+
+
+// ================= STATUS LABEL =================
+
+private void SetAdminStatus(string text, Color color)
+{
+    lblAdminStatus.Text = text;
+    lblAdminStatus.ForeColor = color;
+}
+
+
+// ================= SYSTEM & OPTIMIZATION =================
+
 private CancellationTokenSource aimBoostCTS;
+
 private readonly object restoreLock = new object();
 
 private System.Windows.Forms.Timer trayBlinkTimer;
@@ -67,13 +83,18 @@ private bool allowExit = false;
 private float currentOverall = 0;
 private int targetOverall = 0;
 
+
 // ================= ORIGINAL MOUSE BACKUP =================
+
 private int originalMouseSpeed;
 private int originalThreshold1;
 private int originalThreshold2;
 private int originalSensitivity;
+
 private bool mouseSettingsSaved = false;
 private bool timerResolutionActive = false;
+
+
 // ================= WINDOWS API =================
 
 // Get foreground window
@@ -81,14 +102,14 @@ private bool timerResolutionActive = false;
 private static extern IntPtr GetForegroundWindow();
 
 
-// FIXED: must use OUT INT (not uint)
+// MUST use OUT INT (correct)
 [DllImport("user32.dll")]
 private static extern int GetWindowThreadProcessId(
     IntPtr hWnd,
     out int lpdwProcessId);
 
 
-// FIXED: must use INT[] not object
+// Apply mouse speed
 [DllImport("user32.dll", SetLastError = true)]
 private static extern bool SystemParametersInfo(
     int uiAction,
@@ -96,6 +117,8 @@ private static extern bool SystemParametersInfo(
     int pvParam,
     int fWinIni);
 
+
+// Apply mouse acceleration
 [DllImport("user32.dll", SetLastError = true)]
 private static extern bool SystemParametersInfo(
     int uiAction,
@@ -104,7 +127,7 @@ private static extern bool SystemParametersInfo(
     int fWinIni);
 
 
-// Timer resolution (input latency boost)
+// Timer resolution boost
 [DllImport("winmm.dll")]
 private static extern uint timeBeginPeriod(uint uMilliseconds);
 
@@ -112,11 +135,13 @@ private static extern uint timeBeginPeriod(uint uMilliseconds);
 private static extern uint timeEndPeriod(uint uMilliseconds);
 
 
-// Mouse optimization constants
+// ================= CONSTANTS =================
+
 private const int SPI_SETMOUSE = 0x0004;
+private const int SPI_SETMOUSESPEED = 0x0071;
+
 private const int SPIF_UPDATEINIFILE = 0x01;
 private const int SPIF_SENDCHANGE = 0x02;
-private const int SPI_SETMOUSESPEED = 0x0071;
         private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
@@ -2345,7 +2370,9 @@ private const int SPI_SETMOUSESPEED = 0x0071;
 
         }
 
-        private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
+        // ================= TOGGLE EVENT =================
+
+private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
 {
     try
     {
@@ -2369,10 +2396,15 @@ private const int SPI_SETMOUSESPEED = 0x0071;
     }
 }
 
+
+// ================= ENABLE =================
+
 private void EnableProAimOptimization()
 {
     SaveOriginalMouseSettings();
+
     DisableMouseAccelerationInstant();
+
     StartRealtimeBoostLoop();
 
     if (!timerResolutionActive)
@@ -2382,11 +2414,17 @@ private void EnableProAimOptimization()
     }
 }
 
+
+// ================= DISABLE =================
+
 private void DisableProAimOptimization()
 {
     aimBoostCTS?.Cancel();
 
     RestorePriorities();
+
+    RestoreAffinity();
+
     RestoreMouseDefaultsInstant();
 
     if (timerResolutionActive)
@@ -2396,16 +2434,18 @@ private void DisableProAimOptimization()
     }
 }
 
+
+// ================= DISABLE ACCELERATION =================
+
 private void DisableMouseAccelerationInstant()
 {
     try
     {
-        // Registry disable acceleration
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "0");
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "0");
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "0");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
 
-        // Apply instantly
         int[] mouseParams = new int[] { 0, 0, 0 };
 
         SystemParametersInfo(
@@ -2414,40 +2454,66 @@ private void DisableMouseAccelerationInstant()
             mouseParams,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
-        // Set registry sensitivity too
-Registry.SetValue(
-    @"HKEY_CURRENT_USER\Control Panel\Mouse",
-    "MouseSensitivity",
-    "10");
-
-// Apply instantly
-SystemParametersInfo(
-    SPI_SETMOUSESPEED,
-    0,
-    10,
-    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+        SystemParametersInfo(
+            SPI_SETMOUSESPEED,
+            0,
+            10,
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
         ForceMouseRefresh();
     }
     catch { }
 }
 
+
+// ================= SAVE ORIGINAL =================
+
+private void SaveOriginalMouseSettings()
+{
+    lock (restoreLock)
+    {
+        if (mouseSettingsSaved) return;
+
+        try
+        {
+            using (RegistryKey key =
+                Registry.CurrentUser.OpenSubKey(@"Control Panel\Mouse"))
+            {
+                originalMouseSpeed =
+                    int.TryParse(key.GetValue("MouseSpeed")?.ToString(), out int ms) ? ms : 1;
+
+                originalThreshold1 =
+                    int.TryParse(key.GetValue("MouseThreshold1")?.ToString(), out int t1) ? t1 : 6;
+
+                originalThreshold2 =
+                    int.TryParse(key.GetValue("MouseThreshold2")?.ToString(), out int t2) ? t2 : 10;
+
+                originalSensitivity =
+                    int.TryParse(key.GetValue("MouseSensitivity")?.ToString(), out int sens) ? sens : 10;
+            }
+
+            mouseSettingsSaved = true;
+        }
+        catch { }
+    }
+}
+
+
+// ================= RESTORE EXACT ORIGINAL =================
+
 private void RestoreMouseDefaultsInstant()
 {
     lock (restoreLock)
     {
+        if (!mouseSettingsSaved) return;
+
         try
         {
-            if (!mouseSettingsSaved)
-                return;
-
-            // Restore registry first
             Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", originalMouseSpeed.ToString());
             Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", originalThreshold1.ToString());
             Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", originalThreshold2.ToString());
             Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", originalSensitivity.ToString());
 
-            // Restore acceleration instantly
             int[] mouseParams =
             {
                 originalThreshold1,
@@ -2461,14 +2527,12 @@ private void RestoreMouseDefaultsInstant()
                 mouseParams,
                 SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
-            // Restore sensitivity EXACT value
             SystemParametersInfo(
                 SPI_SETMOUSESPEED,
                 0,
                 originalSensitivity,
                 SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
-            // Instant refresh
             ForceMouseRefresh();
 
             mouseSettingsSaved = false;
@@ -2476,6 +2540,10 @@ private void RestoreMouseDefaultsInstant()
         catch { }
     }
 }
+
+
+// ================= REFRESH =================
+
 private void ForceMouseRefresh()
 {
     try
@@ -2485,6 +2553,32 @@ private void ForceMouseRefresh()
     }
     catch { }
 }
+
+
+// ================= BOOST LOOP =================
+
+private void StartRealtimeBoostLoop()
+{
+    if (aimBoostCTS != null && !aimBoostCTS.IsCancellationRequested)
+        return;
+
+    aimBoostCTS = new CancellationTokenSource();
+
+    var token = aimBoostCTS.Token;
+
+    Task.Run(async () =>
+    {
+        while (!token.IsCancellationRequested)
+        {
+            BoostActiveGameOnly();
+
+            await Task.Delay(80);
+        }
+    }, token);
+}
+
+
+// ================= BOOST GAME =================
 
 private void BoostActiveGameOnly()
 {
@@ -2500,88 +2594,52 @@ private void BoostActiveGameOnly()
 
         if (gameProcesses.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase))
         {
-            // Save original priority
             if (!originalPriorities.ContainsKey(pid))
                 originalPriorities.TryAdd(pid, p.PriorityClass);
 
-            // Boost
-            if (p.PriorityClass == ProcessPriorityClass.Normal)
-                p.PriorityClass = ProcessPriorityClass.High;
+            if (!originalAffinity.ContainsKey(pid))
+                originalAffinity.TryAdd(pid, p.ProcessorAffinity);
+
+            p.PriorityClass = ProcessPriorityClass.High;
+
+            p.ProcessorAffinity = (IntPtr)((1 << Environment.ProcessorCount) - 1);
         }
     }
     catch { }
-}  
-private void SaveOriginalMouseSettings()
-{
-    lock (restoreLock)
-    {
-        if (mouseSettingsSaved) return;
+}
 
+
+// ================= RESTORE PRIORITY =================
+
+private void RestorePriorities()
+{
+    foreach (var entry in originalPriorities)
+    {
         try
         {
-            using (RegistryKey key =
-                Registry.CurrentUser.OpenSubKey(@"Control Panel\Mouse"))
-            {
-                originalMouseSpeed =
-    int.TryParse(key.GetValue("MouseSpeed")?.ToString(), out int ms) ? ms : 1;
-
-originalThreshold1 =
-    int.TryParse(key.GetValue("MouseThreshold1")?.ToString(), out int t1) ? t1 : 6;
-
-originalThreshold2 =
-    int.TryParse(key.GetValue("MouseThreshold2")?.ToString(), out int t2) ? t2 : 10;
-
-originalSensitivity =
-    int.TryParse(key.GetValue("MouseSensitivity")?.ToString(), out int sens) ? sens : 10;
-            }
-
-            mouseSettingsSaved = true;
+            Process.GetProcessById(entry.Key).PriorityClass = entry.Value;
         }
         catch { }
     }
+
+    originalPriorities.Clear();
 }
 
-private void StartRealtimeBoostLoop()
+
+// ================= RESTORE AFFINITY =================
+
+private void RestoreAffinity()
 {
-    if (aimBoostCTS != null && !aimBoostCTS.IsCancellationRequested)
-        return;
-
-    aimBoostCTS = new CancellationTokenSource();
-    var token = aimBoostCTS.Token;
-
-    Task.Run(async () =>
-    {
-        while (!token.IsCancellationRequested)
-        {
-            BoostActiveGameOnly();
-
-            try
-            {
-                await Task.Delay(100, token); // PRO LEVEL SPEED
-            }
-            catch
-            {
-                break;
-            }
-        }
-    }, token);
-}
-private void RestorePriorities()
-{
-    foreach (var entry in originalPriorities.ToList())
+    foreach (var entry in originalAffinity)
     {
         try
         {
-            Process p = Process.GetProcessById(entry.Key);
-            p.PriorityClass = entry.Value;
+            Process.GetProcessById(entry.Key).ProcessorAffinity = entry.Value;
         }
-        catch
-        {
-            // process already exited - ignore
-        }
+        catch { }
     }
 
-    originalPriorities.Clear();
+    originalAffinity.Clear();
 }
 
     }
