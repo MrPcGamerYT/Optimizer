@@ -128,26 +128,7 @@ private const int SPI_SETMOUSESPEED = 0x0071;
 
 private const int SPIF_UPDATEINIFILE = 0x01;
 private const int SPIF_SENDCHANGE = 0x02;
-
-
-// ================= SAFE STATUS FUNCTION =================
-private void SetAdminStatus(string text, Color color)
-{
-    if (InvokeRequired)
-    {
-        Invoke(new Action(() =>
-        {
-            lblAdminStatus.Text = text;
-            lblAdminStatus.ForeColor = color;
-        }));
-    }
-    else
-    {
-        lblAdminStatus.Text = text;
-        lblAdminStatus.ForeColor = color;
-    }
-}
-        private static readonly HashSet<string> ProtectedProcessNames =
+private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
     "system",
