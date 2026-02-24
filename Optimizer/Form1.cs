@@ -22,44 +22,31 @@ namespace Optimizer
 {
     public partial class Optimizer : Form
     {
-                // ================= PRIORITY STORAGE =================
+     // ================= THREAD SAFE COLLECTIONS =================
+using System.Collections.Concurrent;
+using Microsoft.Win32;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
-// Store original priorities safely
+// 🔁 Store original priorities (THREAD SAFE)
 private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
     = new ConcurrentDictionary<int, ProcessPriorityClass>();
 
-// Store original CPU affinity
-private readonly ConcurrentDictionary<int, IntPtr> originalAffinity
-    = new ConcurrentDictionary<int, IntPtr>();
-
-
 // ================= PANEL MEMORY =================
-
-// Should remember last panel
 private bool rememberLastPanel = true;
-
-// Last opened panel name
 private string lastPanel = "homePnl";
 
-// Storage alert tracking
+// ================= STORAGE ALERT =================
 private int lastAlertLevel = -1;
 
-
-// ================= STATUS LABEL =================
-
-private void SetAdminStatus(string text, Color color)
-{
-    lblAdminStatus.Text = text;
-    lblAdminStatus.ForeColor = color;
-}
-
-
-// ================= SYSTEM & OPTIMIZATION =================
-
+// ================= AIM OPTIMIZATION =================
 private CancellationTokenSource aimBoostCTS;
-
 private readonly object restoreLock = new object();
 
+// FIX: prevent multiple timer resolution calls
+private bool timerResolutionActive = false;
+
+// ================= TRAY =================
 private System.Windows.Forms.Timer trayBlinkTimer;
 private bool trayBlinkState = false;
 
@@ -69,8 +56,10 @@ private Icon trayIconAlert;
 private NotifyIcon trayIcon;
 private ContextMenuStrip trayMenu;
 
+// ================= PING =================
 private System.Windows.Forms.Timer pingTimer;
 
+// ================= GAME MODE =================
 private CancellationTokenSource normalGameCTS;
 private CancellationTokenSource advancedGameCTS;
 private CancellationTokenSource emulatorCTS;
@@ -80,19 +69,17 @@ private bool advancedGameModeRunning = false;
 private bool suppressMinimizeEvent = false;
 private bool allowExit = false;
 
+// ================= PERFORMANCE TRACKING =================
 private float currentOverall = 0;
 private int targetOverall = 0;
 
-
 // ================= ORIGINAL MOUSE BACKUP =================
-
-private int originalMouseSpeed;
-private int originalThreshold1;
-private int originalThreshold2;
-private int originalSensitivity;
+private int originalMouseSpeed = 1;
+private int originalThreshold1 = 6;
+private int originalThreshold2 = 10;
+private int originalSensitivity = 10;
 
 private bool mouseSettingsSaved = false;
-private bool timerResolutionActive = false;
 
 
 // ================= WINDOWS API =================
@@ -102,14 +89,14 @@ private bool timerResolutionActive = false;
 private static extern IntPtr GetForegroundWindow();
 
 
-// MUST use OUT INT (correct)
+// FIX: must use OUT INT
 [DllImport("user32.dll")]
 private static extern int GetWindowThreadProcessId(
     IntPtr hWnd,
     out int lpdwProcessId);
 
 
-// Apply mouse speed
+// FIX: overload for INT value
 [DllImport("user32.dll", SetLastError = true)]
 private static extern bool SystemParametersInfo(
     int uiAction,
@@ -118,7 +105,7 @@ private static extern bool SystemParametersInfo(
     int fWinIni);
 
 
-// Apply mouse acceleration
+// FIX: overload for INT ARRAY
 [DllImport("user32.dll", SetLastError = true)]
 private static extern bool SystemParametersInfo(
     int uiAction,
@@ -127,7 +114,7 @@ private static extern bool SystemParametersInfo(
     int fWinIni);
 
 
-// Timer resolution boost
+// ================= TIMER RESOLUTION =================
 [DllImport("winmm.dll")]
 private static extern uint timeBeginPeriod(uint uMilliseconds);
 
@@ -135,13 +122,31 @@ private static extern uint timeBeginPeriod(uint uMilliseconds);
 private static extern uint timeEndPeriod(uint uMilliseconds);
 
 
-// ================= CONSTANTS =================
-
+// ================= MOUSE CONSTANTS =================
 private const int SPI_SETMOUSE = 0x0004;
 private const int SPI_SETMOUSESPEED = 0x0071;
 
 private const int SPIF_UPDATEINIFILE = 0x01;
 private const int SPIF_SENDCHANGE = 0x02;
+
+
+// ================= SAFE STATUS FUNCTION =================
+private void SetAdminStatus(string text, Color color)
+{
+    if (InvokeRequired)
+    {
+        Invoke(new Action(() =>
+        {
+            lblAdminStatus.Text = text;
+            lblAdminStatus.ForeColor = color;
+        }));
+    }
+    else
+    {
+        lblAdminStatus.Text = text;
+        lblAdminStatus.ForeColor = color;
+    }
+}
         private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
