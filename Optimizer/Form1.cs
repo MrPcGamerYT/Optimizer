@@ -22,13 +22,13 @@ namespace Optimizer
 {
     public partial class Optimizer : Form
     {
-                // ================= PRIORITY STORAGE =================
+// ================= PRIORITY STORAGE =================
 
 // Store original priorities safely
 private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
     = new ConcurrentDictionary<int, ProcessPriorityClass>();
 
-// Store original CPU affinity
+// Store original CPU affinity safely
 private readonly ConcurrentDictionary<int, IntPtr> originalAffinity
     = new ConcurrentDictionary<int, IntPtr>();
 
@@ -49,8 +49,19 @@ private int lastAlertLevel = -1;
 
 private void SetAdminStatus(string text, Color color)
 {
-    lblAdminStatus.Text = text;
-    lblAdminStatus.ForeColor = color;
+    if (InvokeRequired)
+    {
+        Invoke(new Action(() =>
+        {
+            lblAdminStatus.Text = text;
+            lblAdminStatus.ForeColor = color;
+        }));
+    }
+    else
+    {
+        lblAdminStatus.Text = text;
+        lblAdminStatus.ForeColor = color;
+    }
 }
 
 
@@ -102,7 +113,7 @@ private bool timerResolutionActive = false;
 private static extern IntPtr GetForegroundWindow();
 
 
-// MUST use OUT INT (correct)
+// Get PID from window (CORRECT)
 [DllImport("user32.dll")]
 private static extern int GetWindowThreadProcessId(
     IntPtr hWnd,
@@ -142,6 +153,15 @@ private const int SPI_SETMOUSESPEED = 0x0071;
 
 private const int SPIF_UPDATEINIFILE = 0x01;
 private const int SPIF_SENDCHANGE = 0x02;
+
+
+// ================= PRO UPGRADE (NEW) =================
+
+// Prevent duplicate boost on same process
+private int lastBoostedPID = -1;
+
+// High precision timer for esports-level responsiveness
+private readonly Stopwatch boostStopwatch = new Stopwatch();
         private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
@@ -784,47 +804,81 @@ private const int SPIF_SENDCHANGE = 0x02;
         // GAME BOOST UTILS
         // ===============================
         private void ApplyGameBoost(Process game, bool isAdvancedMode)
+{
+    try
+    {
+        if (game == null || game.HasExited)
+            return;
+
+        // ✅ SET ACTIVE TARGET SAFELY
+        activeBoostTarget = game.ProcessName;
+
+        // ✅ SAVE ORIGINAL PRIORITY ONCE
+        originalPriorities.AddOrUpdate(
+            game.Id,
+            game.PriorityClass,
+            (id, old) => old
+        );
+
+        // ✅ SAVE ORIGINAL AFFINITY ONCE
+        originalAffinity.AddOrUpdate(
+            game.Id,
+            game.ProcessorAffinity,
+            (id, old) => old
+        );
+
+        // ✅ APPLY HIGH PRIORITY
+        if (game.PriorityClass != ProcessPriorityClass.High)
+            game.PriorityClass = ProcessPriorityClass.High;
+
+        // ✅ APPLY FULL CPU AFFINITY (max performance)
+        IntPtr fullAffinity =
+            (IntPtr)((1L << Environment.ProcessorCount) - 1);
+
+        if (game.ProcessorAffinity != fullAffinity)
+            game.ProcessorAffinity = fullAffinity;
+
+        // ✅ LOWER BACKGROUND APPS SAFELY
+        foreach (Process p in Process.GetProcesses())
         {
             try
             {
-                // ✅ SET ACTIVE TARGET HERE (CRITICAL)
-                activeBoostTarget = game.ProcessName;
+                if (p == null || p.HasExited)
+                    continue;
 
-                if (game.PriorityClass != ProcessPriorityClass.AboveNormal)
-                    game.PriorityClass = ProcessPriorityClass.AboveNormal;
+                if (p.Id == game.Id)
+                    continue;
 
-                foreach (Process p in Process.GetProcesses())
-                {
-                    try
-                    {
-                        if (p.HasExited)
-                            continue;
+                if (IsProtectedProcess(p))
+                    continue;
 
-                        if (IsProtectedProcess(p))
-                            continue;
+                // Save original priority once only
+                originalPriorities.AddOrUpdate(
+                    p.Id,
+                    p.PriorityClass,
+                    (id, old) => old
+                );
 
-                        if (p.Id == game.Id)
-                            continue;
-
-                        if (originalPriorities.TryAdd(p.Id, p.PriorityClass))
-                        {
-                            p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                        }
-                    }
-                    catch { }
-                }
-
-                if (isAdvancedMode && IsHandleCreated && !IsDisposed)
-                {
-                    BeginInvoke((Action)(() =>
-                    {
-                        lblGameModeStatus.Text = $"Game Mode Applied on {game.ProcessName}";
-                        lblGameModeStatus.ForeColor = Color.Lime;
-                    }));
-                }
+                if (p.PriorityClass != ProcessPriorityClass.BelowNormal)
+                    p.PriorityClass = ProcessPriorityClass.BelowNormal;
             }
             catch { }
         }
+
+        // ✅ SAFE UI UPDATE
+        if (isAdvancedMode && IsHandleCreated && !IsDisposed)
+        {
+            BeginInvoke((Action)(() =>
+            {
+                lblGameModeStatus.Text =
+                    $"Game Mode Applied on {game.ProcessName} 🚀";
+
+                lblGameModeStatus.ForeColor = Color.Lime;
+            }));
+        }
+    }
+    catch { }
+}
 
 
 
@@ -836,40 +890,45 @@ private const int SPIF_SENDCHANGE = 0x02;
 
 
         private async Task NormalGameModeLoopAsync(CancellationToken token)
+{
+    try
+    {
+        while (!token.IsCancellationRequested)
         {
-            while (!token.IsCancellationRequested)
+            bool found = false;
+
+            foreach (string gameName in gameExecutablesSet)
             {
-                bool found = false;
+                Process p =
+                    Process.GetProcessesByName(gameName)
+                    .FirstOrDefault();
 
-                foreach (string game in gameExecutablesSet)
+                if (p != null && !p.HasExited)
                 {
-                    Process[] processes = Process.GetProcessesByName(game);
+                    found = true;
 
-                    if (processes.Length > 0)
+                    if (activeBoostTarget != p.ProcessName)
                     {
-                        found = true;
-
-                        if (activeBoostTarget != game)
-                        {
-                            activeBoostTarget = game;
-                            ApplyGameBoost(processes[0], false); // Silent (no UI)
-                        }
-                        break;
+                        ApplyGameBoost(p, false);
                     }
+
+                    break;
                 }
-
-                if (!found)
-                {
-                    if (!AnyBoostModeActive())
-                        RestoreAllPriorities();
-
-                    activeBoostTarget = null;
-                }
-
-                await Task.Delay(3500, token);
             }
-        }
 
+            if (!found)
+            {
+                activeBoostTarget = null;
+
+                if (!AnyBoostModeActive())
+                    RestoreAllPriorities();
+            }
+
+            await Task.Delay(2000, token);
+        }
+    }
+    catch (OperationCanceledException) { }
+}
 
 
         // ===============================
@@ -878,101 +937,120 @@ private const int SPIF_SENDCHANGE = 0x02;
 
 
         private async Task AdvancedGameModeLoopAsync(CancellationToken token)
+{
+    try
+    {
+        while (!token.IsCancellationRequested)
         {
-            try
+            bool found = false;
+
+            foreach (string gameName in gameExecutablesSet)
             {
-                while (!token.IsCancellationRequested)
+                Process p =
+                    Process.GetProcessesByName(gameName)
+                    .FirstOrDefault();
+
+                if (p != null && !p.HasExited)
                 {
-                    bool found = false;
+                    found = true;
 
-                    foreach (string game in gameExecutablesSet)
+                    if (activeBoostTarget != p.ProcessName)
                     {
-                        var p = Process.GetProcessesByName(game).FirstOrDefault();
-                        if (p != null)
-                        {
-                            found = true;
-
-                            if (activeBoostTarget != game)
-                            {
-                                activeBoostTarget = game;
-                                ApplyGameBoost(p, true);
-                            }
-                            break;
-                        }
+                        ApplyGameBoost(p, true);
                     }
 
-                    if (!found)
-                    {
-                        // Safe UI update
-                        if (IsHandleCreated && !IsDisposed)
-                        {
-                            BeginInvoke((Action)(() =>
-                            {
-                                lblGameModeStatus.Text = "Advanced Game Mode: Waiting for Game…";
-                                lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
-                            }));
-                        }
-
-                        if (!AnyBoostModeActive())
-                            RestoreAllPriorities();
-                        activeBoostTarget = null;
-                    }
-
-                    await Task.Delay(2000, token);
+                    break;
                 }
             }
-            catch (OperationCanceledException)
+
+            if (!found)
             {
-                // expected when mode is turned off
-            }
-            finally
-            {
-                // Final UI reset (safe)
+                activeBoostTarget = null;
+
                 if (IsHandleCreated && !IsDisposed)
                 {
                     BeginInvoke((Action)(() =>
                     {
-                        lblGameModeStatus.Text = "Advanced Game Mode: DISABLED";
-                        lblGameModeStatus.ForeColor = Color.Orange;
+                        lblGameModeStatus.Text =
+                            "Advanced Game Mode: Waiting for Game…";
+
+                        lblGameModeStatus.ForeColor =
+                            Color.DeepSkyBlue;
                     }));
                 }
-            }
-        }
 
+                if (!AnyBoostModeActive())
+                    RestoreAllPriorities();
+            }
+
+            await Task.Delay(1500, token);
+        }
+    }
+    catch (OperationCanceledException) { }
+    finally
+    {
+        if (IsHandleCreated && !IsDisposed)
+        {
+            BeginInvoke((Action)(() =>
+            {
+                lblGameModeStatus.Text =
+                    "Advanced Game Mode: DISABLED";
+
+                lblGameModeStatus.ForeColor = Color.Orange;
+            }));
+        }
+    }
+}
 
         private void RestoreAllPriorities()
+{
+    try
+    {
+        foreach (var entry in originalPriorities.ToArray())
         {
-            if (originalPriorities.IsEmpty)
-                return;
-
-            foreach (var item in originalPriorities.ToArray())
+            try
             {
-                try
-                {
-                    Process p = Process.GetProcessById(item.Key);
-                    if (!p.HasExited)
-                    {
-                        p.PriorityClass = item.Value;
-                    }
-                }
-                catch
-                {
-                    // process may no longer exist
-                }
-            }
+                Process p =
+                    Process.GetProcessById(entry.Key);
 
-            originalPriorities.Clear();
-            activeBoostTarget = null;
+                if (!p.HasExited)
+                    p.PriorityClass = entry.Value;
+            }
+            catch { }
         }
+
+        originalPriorities.Clear();
+
+        foreach (var entry in originalAffinity.ToArray())
+        {
+            try
+            {
+                Process p =
+                    Process.GetProcessById(entry.Key);
+
+                if (!p.HasExited)
+                    p.ProcessorAffinity = entry.Value;
+            }
+            catch { }
+        }
+
+        originalAffinity.Clear();
+
+        activeBoostTarget = null;
+    }
+    catch { }
+}
 
 
         private bool AnyBoostModeActive()
-        {
-            return activeBoostTarget != null
-                   || tgAdvancedGame.Checked
-                   || tgAdvancedEmulator.Checked
-                   || tgNormalGame.Checked;
-        }
+{
+    return
+        activeBoostTarget != null ||
+        tgAdvancedGame.Checked ||
+        tgAdvancedEmulator.Checked ||
+        tgNormalGame.Checked ||
+        tgBgApps.Checked;
+}
 
 
 
