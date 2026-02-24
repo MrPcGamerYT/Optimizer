@@ -2553,8 +2553,8 @@ public Optimizer()
 
         
 
-// ================= AIM OPTIMIZE TOGGLE =================
 
+// ================= AIM OPTIMIZE TOGGLE =================
 private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
 {
     try
@@ -2581,15 +2581,12 @@ private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
 
 
 // ================= ENABLE PRO AIM =================
-
 private void EnableProAimOptimization()
 {
     lock (restoreLock)
     {
         SaveOriginalMouseSettings();
-
         DisableMouseAccelerationInstant();
-
         StartRealtimeBoostLoop();
 
         if (!timerResolutionActive)
@@ -2602,7 +2599,6 @@ private void EnableProAimOptimization()
 
 
 // ================= DISABLE PRO AIM =================
-
 private void DisableProAimOptimization()
 {
     lock (restoreLock)
@@ -2616,9 +2612,7 @@ private void DisableProAimOptimization()
         catch { }
 
         RestorePriorities();
-
         RestoreAffinity();
-
         RestoreMouseDefaultsInstant();
 
         if (timerResolutionActive)
@@ -2747,69 +2741,63 @@ private void ForceMouseRefresh()
 
 
 // ================= REALTIME BOOST LOOP =================
-
 private void StartRealtimeBoostLoop()
 {
     if (aimBoostCTS != null)
         return;
 
     aimBoostCTS = new CancellationTokenSource();
-
     var token = aimBoostCTS.Token;
 
     Task.Run(async () =>
     {
         while (!token.IsCancellationRequested)
         {
-            BoostActiveGameOnly();
+            BoostActiveGameUltra();
 
             try
             {
-                await Task.Delay(60, token); // ultra smooth (16 updates/sec)
+                await Task.Delay(15, token); // 66 updates/sec for ultra smooth Free Fire aim
             }
-            catch
-            {
-                break;
-            }
+            catch { break; }
         }
     }, token);
 }
 
-
-// ================= BOOST ACTIVE GAME =================
-
-private void BoostActiveGameOnly()
+// ================= BOOST ACTIVE GAME (ULTRA MODE) =================
+private void BoostActiveGameUltra()
 {
     try
     {
         IntPtr hwnd = GetForegroundWindow();
-
-        if (hwnd == IntPtr.Zero)
-            return;
+        if (hwnd == IntPtr.Zero) return;
 
         int pid;
-
         GetWindowThreadProcessId(hwnd, out pid);
-
         Process p = Process.GetProcessById(pid);
 
         if (!gameProcesses.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase))
             return;
 
+        // Save original priority & affinity
         if (!originalPriorities.ContainsKey(pid))
             originalPriorities.TryAdd(pid, p.PriorityClass);
 
         if (!originalAffinity.ContainsKey(pid))
             originalAffinity.TryAdd(pid, p.ProcessorAffinity);
 
-        if (p.PriorityClass != ProcessPriorityClass.High)
+        // Ultra Free Fire / Emulator Priority
+        if (p.PriorityClass != ProcessPriorityClass.RealTime)
             p.PriorityClass = ProcessPriorityClass.High;
 
-        IntPtr fullAffinity =
-            (IntPtr)((1 << Environment.ProcessorCount) - 1);
-
+        // Full CPU affinity unlock
+        IntPtr fullAffinity = (IntPtr)((1 << Environment.ProcessorCount) - 1);
         if (p.ProcessorAffinity != fullAffinity)
             p.ProcessorAffinity = fullAffinity;
+
+        // Optional: Micro mouse refresh for smoother headshots
+        ForceMouseRefresh();
+
     }
     catch { }
 }
