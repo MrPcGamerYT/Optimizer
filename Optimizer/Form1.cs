@@ -1576,56 +1576,116 @@ private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
         }
 
 
-        public Optimizer()
+        // ===============================
+// CONSTRUCTOR (FULL SAFE INIT)
+// ===============================
+public Optimizer()
+{
+    InitializeComponent();
+
+    InitCounters();
+
+    LoadSystemInfo();
+
+    InitTray();
+
+    tip = new ToolTip();
+
+    systemDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
+
+    trayIconNormal = this.Icon;
+    trayIconAlert = Properties.Resources.Icon;
+
+    LoadSavedSettings();
+
+    // ===============================
+    // PING TIMER
+    // ===============================
+    pingTimer = new System.Windows.Forms.Timer();
+    pingTimer.Interval = 1000;
+    pingTimer.Tick += PingTimer_Tick;
+    pingTimer.Start();
+
+
+    // ===============================
+    // USAGE TIMER
+    // ===============================
+    usageTimer.Interval = 1000;
+    usageTimer.Tick += UsageTimer_Tick;
+    usageTimer.Start();
+
+
+    // ===============================
+    // ANIMATION TIMER
+    // ===============================
+    animationTimer = new System.Windows.Forms.Timer();
+    animationTimer.Interval = 16;
+    animationTimer.Tick += AnimationTimer_Tick;
+    animationTimer.Start();
+
+
+    // ===============================
+    // TRAY BLINK TIMER
+    // ===============================
+    trayBlinkTimer = new System.Windows.Forms.Timer();
+    trayBlinkTimer.Interval = 500;
+
+    trayBlinkTimer.Tick += (s, e) =>
+    {
+        if (trayIcon == null)
+            return;
+
+        trayBlinkState = !trayBlinkState;
+
+        trayIcon.Icon =
+            trayBlinkState
+            ? trayIconAlert
+            : trayIconNormal;
+    };
+
+
+    // ===============================
+    // WINDOW LOCK SIZE
+    // ===============================
+    this.MaximumSize = this.Size;
+    this.MinimumSize = this.Size;
+
+
+    lblVersion.Text = Application.ProductVersion;
+
+
+    // ===============================
+    // GAME SET INIT
+    // ===============================
+    gameExecutablesSet = new HashSet<string>(
+        gameExecutables.Select(g => g.ToLower())
+    );
+
+
+    lblDriveCTitle.Text =
+        $"{systemDrive.VolumeLabel} ({systemDrive.Name.TrimEnd('\\')})";
+
+
+    // ===============================
+    // AUTO AIM OPT ENABLE
+    // ===============================
+    if (Properties.Settings.Default.AimOptimize)
+    {
+        EnableProAimOptimization();
+    }
+
+    // ===============================
+    // CHECK UPDATE (SAFE BACKGROUND)
+    // ===============================
+    Task.Run(() =>
+    {
+        try
         {
-            InitializeComponent();
-            InitCounters();
-            LoadSystemInfo();
-            // ===============================
-            // PING TIMER (1s)
-            // ===============================
-            pingTimer = new System.Windows.Forms.Timer();
-            pingTimer.Interval = 1000; // 1 second
-            pingTimer.Tick += PingTimer_Tick;
-            pingTimer.Start();
-            InitTray();
-            tip = new ToolTip();
-            systemDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
             Updater.CheckAndUpdate();
-            lblDriveCTitle.Text = $"{systemDrive.VolumeLabel} ({systemDrive.Name.TrimEnd('\\')})";
-            // Main Data Fetch Timer (1 second)
-            usageTimer.Interval = 1000;
-            usageTimer.Tick += UsageTimer_Tick;
-            usageTimer.Start();
-            // High-Speed Animation Timer (16ms ~ 60 FPS)
-            animationTimer = new System.Windows.Forms.Timer();
-            animationTimer.Interval = 16;
-            animationTimer.Tick += AnimationTimer_Tick;
-            animationTimer.Start();
-            trayIconNormal = this.Icon;
-            trayIconAlert = Properties.Resources.Icon;
-            LoadSavedSettings();
-            trayBlinkTimer = new System.Windows.Forms.Timer();
-            trayBlinkTimer.Interval = 500; // blink speed (ms)
-            this.MaximumSize = this.Size;
-            this.MinimumSize = this.Size;
-            lblVersion.Text = Application.ProductVersion; // ✅ SAFE HERE TOO
-            tgAimOptimize.Checked = Properties.Settings.Default.AimOptimize;
-            gameExecutablesSet = new HashSet<string>(
-            gameExecutables.Select(g => g.ToLower())
-            );
-
-
-            trayBlinkTimer.Tick += (s, e) =>
-            {
-                if (trayIcon == null) return;
-
-                trayBlinkState = !trayBlinkState;
-                trayIcon.Icon = trayBlinkState ? trayIconAlert : trayIconNormal;
-            };
-
-
         }
+        catch { }
+    });
+}
 
         protected override void WndProc(ref Message m)
         {
