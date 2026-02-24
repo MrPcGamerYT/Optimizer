@@ -20,7 +20,9 @@ using System.Windows.Forms;
 
 namespace Optimizer
 {
-    // ================= PRIORITY STORAGE =================
+    public partial class Optimizer : Form
+    {
+                // ================= PRIORITY STORAGE =================
 
 // Store original priorities safely
 private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
@@ -140,7 +142,7 @@ private const int SPI_SETMOUSESPEED = 0x0071;
 
 private const int SPIF_UPDATEINIFILE = 0x01;
 private const int SPIF_SENDCHANGE = 0x02;
-private static readonly HashSet<string> ProtectedProcessNames =
+        private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
     "system",
