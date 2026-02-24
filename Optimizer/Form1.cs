@@ -41,7 +41,7 @@ namespace Optimizer
             lblAdminStatus.ForeColor = color;
         }
         // ================= SYSTEM & OPTIMIZATION DECLARATIONS =================
-
+private CancellationTokenSource aimBoostCTS;
 private readonly object restoreLock = new object();
 
 private System.Windows.Forms.Timer trayBlinkTimer;
@@ -67,7 +67,12 @@ private bool allowExit = false;
 private float currentOverall = 0;
 private int targetOverall = 0;
 
-
+// ================= ORIGINAL MOUSE BACKUP =================
+private int originalMouseSpeed;
+private int originalThreshold1;
+private int originalThreshold2;
+private int originalSensitivity;
+private bool mouseSettingsSaved = false;
 // ================= WINDOWS API =================
 
 // Get foreground window
@@ -2352,13 +2357,15 @@ private const int SPIF_SENDCHANGE = 0x02;
 
 private void EnableProAimOptimization()
 {
+    SaveOriginalMouseSettings(); // IMPORTANT
     DisableMouseAccelerationInstant();
-    BoostActiveGameOnly();
+    StartRealtimeBoostLoop();
     timeBeginPeriod(1);
 }
 
 private void DisableProAimOptimization()
 {
+    aimBoostCTS?.Cancel();
     RestoreMouseDefaultsInstant();
     timeEndPeriod(1);
 }
@@ -2389,12 +2396,17 @@ private void RestoreMouseDefaultsInstant()
 {
     try
     {
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "1");
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "6");
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "10");
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", originalMouseSpeed.ToString());
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", originalThreshold1.ToString());
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", originalThreshold2.ToString());
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", originalSensitivity.ToString());
 
-        int[] mouseParams = new int[] { 6, 10, 1 };
+        int[] mouseParams = new int[]
+        {
+            originalThreshold1,
+            originalThreshold2,
+            originalMouseSpeed
+        };
 
         SystemParametersInfo(
             SPI_SETMOUSE,
@@ -2435,6 +2447,40 @@ private void BoostActiveGameOnly()
         }
     }
     catch { }
-}       
+}   
+private void SaveOriginalMouseSettings()
+{
+    if (mouseSettingsSaved) return;
+
+    try
+    {
+        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Control Panel\Mouse"))
+        {
+            originalMouseSpeed = int.Parse(key.GetValue("MouseSpeed").ToString());
+            originalThreshold1 = int.Parse(key.GetValue("MouseThreshold1").ToString());
+            originalThreshold2 = int.Parse(key.GetValue("MouseThreshold2").ToString());
+            originalSensitivity = int.Parse(key.GetValue("MouseSensitivity").ToString());
+        }
+
+        mouseSettingsSaved = true;
+    }
+    catch { }
+}
+
+private void StartRealtimeBoostLoop()
+{
+    aimBoostCTS?.Cancel();
+    aimBoostCTS = new CancellationTokenSource();
+
+    Task.Run(async () =>
+    {
+        while (!aimBoostCTS.Token.IsCancellationRequested)
+        {
+            BoostActiveGameOnly();
+            await Task.Delay(1500);
+        }
+    });
+}
+
     }
 }
