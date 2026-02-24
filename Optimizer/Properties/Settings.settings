@@ -11,5 +11,11 @@
     <Setting Name="LastPanel" Type="System.String" Scope="User">
       <Value Profile="(Default)">Homepnl</Value>
     </Setting>
+    <Setting Name="transparencySlider" Type="System.String" Scope="User">
+      <Value Profile="(Default)">100</Value>
+    </Setting>
+    <Setting Name="AimOptimize" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
