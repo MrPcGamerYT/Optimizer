@@ -73,6 +73,7 @@ private int originalThreshold1;
 private int originalThreshold2;
 private int originalSensitivity;
 private bool mouseSettingsSaved = false;
+private bool timerResolutionActive = false;
 // ================= WINDOWS API =================
 
 // Get foreground window
@@ -88,6 +89,13 @@ private static extern int GetWindowThreadProcessId(
 
 
 // FIXED: must use INT[] not object
+[DllImport("user32.dll", SetLastError = true)]
+private static extern bool SystemParametersInfo(
+    int uiAction,
+    int uiParam,
+    int pvParam,
+    int fWinIni);
+
 [DllImport("user32.dll", SetLastError = true)]
 private static extern bool SystemParametersInfo(
     int uiAction,
@@ -108,6 +116,7 @@ private static extern uint timeEndPeriod(uint uMilliseconds);
 private const int SPI_SETMOUSE = 0x0004;
 private const int SPIF_UPDATEINIFILE = 0x01;
 private const int SPIF_SENDCHANGE = 0x02;
+private const int SPI_SETMOUSESPEED = 0x0071;
         private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
@@ -2304,6 +2313,11 @@ private const int SPIF_SENDCHANGE = 0x02;
                     default: ShowPanel(Homepnl, "Homepnl"); break;
                 }
             }
+            if (Properties.Settings.Default.AimOptimize)
+                {
+                    tgAimOptimize.Checked = true;
+                    EnableProAimOptimization();
+                }
         }
 
         private void label9_Click(object sender, EventArgs e)
@@ -2357,28 +2371,41 @@ private const int SPIF_SENDCHANGE = 0x02;
 
 private void EnableProAimOptimization()
 {
-    SaveOriginalMouseSettings(); // IMPORTANT
+    SaveOriginalMouseSettings();
     DisableMouseAccelerationInstant();
     StartRealtimeBoostLoop();
-    timeBeginPeriod(1);
+
+    if (!timerResolutionActive)
+    {
+        timeBeginPeriod(1);
+        timerResolutionActive = true;
+    }
 }
 
 private void DisableProAimOptimization()
 {
     aimBoostCTS?.Cancel();
+
+    RestorePriorities();
     RestoreMouseDefaultsInstant();
-    timeEndPeriod(1);
+
+    if (timerResolutionActive)
+    {
+        timeEndPeriod(1);
+        timerResolutionActive = false;
+    }
 }
 
 private void DisableMouseAccelerationInstant()
 {
     try
     {
+        // Registry disable acceleration
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "0");
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "0");
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "0");
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
 
+        // Apply instantly
         int[] mouseParams = new int[] { 0, 0, 0 };
 
         SystemParametersInfo(
@@ -2387,6 +2414,19 @@ private void DisableMouseAccelerationInstant()
             mouseParams,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
+        // Set registry sensitivity too
+Registry.SetValue(
+    @"HKEY_CURRENT_USER\Control Panel\Mouse",
+    "MouseSensitivity",
+    "10");
+
+// Apply instantly
+SystemParametersInfo(
+    SPI_SETMOUSESPEED,
+    0,
+    10,
+    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
         ForceMouseRefresh();
     }
     catch { }
@@ -2394,31 +2434,48 @@ private void DisableMouseAccelerationInstant()
 
 private void RestoreMouseDefaultsInstant()
 {
-    try
+    lock (restoreLock)
     {
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", originalMouseSpeed.ToString());
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", originalThreshold1.ToString());
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", originalThreshold2.ToString());
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", originalSensitivity.ToString());
-
-        int[] mouseParams = new int[]
+        try
         {
-            originalThreshold1,
-            originalThreshold2,
-            originalMouseSpeed
-        };
+            if (!mouseSettingsSaved)
+                return;
 
-        SystemParametersInfo(
-            SPI_SETMOUSE,
-            0,
-            mouseParams,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            // Restore registry first
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", originalMouseSpeed.ToString());
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", originalThreshold1.ToString());
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", originalThreshold2.ToString());
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", originalSensitivity.ToString());
 
-        ForceMouseRefresh();
+            // Restore acceleration instantly
+            int[] mouseParams =
+            {
+                originalThreshold1,
+                originalThreshold2,
+                originalMouseSpeed
+            };
+
+            SystemParametersInfo(
+                SPI_SETMOUSE,
+                0,
+                mouseParams,
+                SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+            // Restore sensitivity EXACT value
+            SystemParametersInfo(
+                SPI_SETMOUSESPEED,
+                0,
+                originalSensitivity,
+                SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+            // Instant refresh
+            ForceMouseRefresh();
+
+            mouseSettingsSaved = false;
+        }
+        catch { }
     }
-    catch { }
 }
-
 private void ForceMouseRefresh()
 {
     try
@@ -2441,45 +2498,90 @@ private void BoostActiveGameOnly()
 
         Process p = Process.GetProcessById(pid);
 
-        if (gameProcesses.Contains(p.ProcessName))
+        if (gameProcesses.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase))
         {
-            p.PriorityClass = ProcessPriorityClass.High;
+            // Save original priority
+            if (!originalPriorities.ContainsKey(pid))
+                originalPriorities.TryAdd(pid, p.PriorityClass);
+
+            // Boost
+            if (p.PriorityClass == ProcessPriorityClass.Normal)
+                p.PriorityClass = ProcessPriorityClass.High;
         }
     }
     catch { }
-}   
+}  
 private void SaveOriginalMouseSettings()
 {
-    if (mouseSettingsSaved) return;
-
-    try
+    lock (restoreLock)
     {
-        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Control Panel\Mouse"))
-        {
-            originalMouseSpeed = int.Parse(key.GetValue("MouseSpeed").ToString());
-            originalThreshold1 = int.Parse(key.GetValue("MouseThreshold1").ToString());
-            originalThreshold2 = int.Parse(key.GetValue("MouseThreshold2").ToString());
-            originalSensitivity = int.Parse(key.GetValue("MouseSensitivity").ToString());
-        }
+        if (mouseSettingsSaved) return;
 
-        mouseSettingsSaved = true;
+        try
+        {
+            using (RegistryKey key =
+                Registry.CurrentUser.OpenSubKey(@"Control Panel\Mouse"))
+            {
+                originalMouseSpeed =
+    int.TryParse(key.GetValue("MouseSpeed")?.ToString(), out int ms) ? ms : 1;
+
+originalThreshold1 =
+    int.TryParse(key.GetValue("MouseThreshold1")?.ToString(), out int t1) ? t1 : 6;
+
+originalThreshold2 =
+    int.TryParse(key.GetValue("MouseThreshold2")?.ToString(), out int t2) ? t2 : 10;
+
+originalSensitivity =
+    int.TryParse(key.GetValue("MouseSensitivity")?.ToString(), out int sens) ? sens : 10;
+            }
+
+            mouseSettingsSaved = true;
+        }
+        catch { }
     }
-    catch { }
 }
 
 private void StartRealtimeBoostLoop()
 {
-    aimBoostCTS?.Cancel();
+    if (aimBoostCTS != null && !aimBoostCTS.IsCancellationRequested)
+        return;
+
     aimBoostCTS = new CancellationTokenSource();
+    var token = aimBoostCTS.Token;
 
     Task.Run(async () =>
     {
-        while (!aimBoostCTS.Token.IsCancellationRequested)
+        while (!token.IsCancellationRequested)
         {
             BoostActiveGameOnly();
-            await Task.Delay(1500);
+
+            try
+            {
+                await Task.Delay(100, token); // PRO LEVEL SPEED
+            }
+            catch
+            {
+                break;
+            }
         }
-    });
+    }, token);
+}
+private void RestorePriorities()
+{
+    foreach (var entry in originalPriorities.ToList())
+    {
+        try
+        {
+            Process p = Process.GetProcessById(entry.Key);
+            p.PriorityClass = entry.Value;
+        }
+        catch
+        {
+            // process already exited - ignore
+        }
+    }
+
+    originalPriorities.Clear();
 }
 
     }
