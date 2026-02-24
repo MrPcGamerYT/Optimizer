@@ -153,7 +153,10 @@ private const int SPI_SETMOUSESPEED = 0x0071;
 
 private const int SPIF_UPDATEINIFILE = 0x01;
 private const int SPIF_SENDCHANGE = 0x02;
+// ================= FREE FIRE AIM SENSITIVITY =================
 
+private const int FREE_FIRE_DRAG_SENS = 8;   // smoother drag headshots
+private const int FREE_FIRE_TAP_SENS = 10;   // perfect one-tap control
 
 // ================= PRO UPGRADE (NEW) =================
 
@@ -178,6 +181,21 @@ private readonly Stopwatch boostStopwatch = new Stopwatch();
     "csrss",
     "smss",
     "fontdrvhost"
+};
+
+// ================= FREE FIRE EMULATORS ONLY =================
+
+private readonly string[] freeFireProcesses =
+{
+    "HD-Player",        // BlueStacks
+    "HD-Frontend",
+    "LdVBoxHeadless",   // LDPlayer
+    "dnplayer",
+    "aow_exe",          // GameLoop
+    "Nox",
+    "NoxVMHandle",
+    "MEmu",
+    "MEmuHeadless"
 };
 
         private string[] gameProcesses =
@@ -2753,7 +2771,7 @@ private void StartRealtimeBoostLoop()
     {
         while (!token.IsCancellationRequested)
         {
-            BoostActiveGameUltra();
+            BoostActiveGameOnly();
 
             try
             {
@@ -2765,39 +2783,56 @@ private void StartRealtimeBoostLoop()
 }
 
 // ================= BOOST ACTIVE GAME (ULTRA MODE) =================
-private void BoostActiveGameUltra()
+private void BoostActiveGameOnly()
 {
     try
     {
         IntPtr hwnd = GetForegroundWindow();
-        if (hwnd == IntPtr.Zero) return;
+
+        if (hwnd == IntPtr.Zero)
+            return;
 
         int pid;
         GetWindowThreadProcessId(hwnd, out pid);
+
         Process p = Process.GetProcessById(pid);
 
-        if (!gameProcesses.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase))
+        bool isFreeFire =
+            freeFireProcesses.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase);
+
+        bool isGame =
+            gameProcesses.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase);
+
+        if (!isGame && !isFreeFire)
             return;
 
-        // Save original priority & affinity
+        // Save original priority
         if (!originalPriorities.ContainsKey(pid))
             originalPriorities.TryAdd(pid, p.PriorityClass);
 
+        // Save original affinity
         if (!originalAffinity.ContainsKey(pid))
             originalAffinity.TryAdd(pid, p.ProcessorAffinity);
 
-        // Ultra Free Fire / Emulator Priority
-        if (p.PriorityClass != ProcessPriorityClass.RealTime)
-            p.PriorityClass = ProcessPriorityClass.High;
+        // SPECIAL BOOST FOR FREE FIRE
+        if (isFreeFire)
+        {
+            if (p.PriorityClass != ProcessPriorityClass.High)
+                p.PriorityClass = ProcessPriorityClass.High;
 
-        // Full CPU affinity unlock
-        IntPtr fullAffinity = (IntPtr)((1 << Environment.ProcessorCount) - 1);
-        if (p.ProcessorAffinity != fullAffinity)
+            IntPtr fullAffinity =
+                (IntPtr)((1 << Environment.ProcessorCount) - 1);
+
             p.ProcessorAffinity = fullAffinity;
 
-        // Optional: Micro mouse refresh for smoother headshots
-        ForceMouseRefresh();
-
+            ApplyFreeFireSensitivity(); // SPECIAL AIM SENSITIVITY
+        }
+        else
+        {
+            // normal boost for other games
+            if (p.PriorityClass != ProcessPriorityClass.AboveNormal)
+                p.PriorityClass = ProcessPriorityClass.AboveNormal;
+        }
     }
     catch { }
 }
@@ -2835,6 +2870,24 @@ private void RestoreAffinity()
 
     originalAffinity.Clear();
 }
+private void ApplyFreeFireSensitivity()
+{
+    try
+    {
+        Registry.SetValue(
+            @"HKEY_CURRENT_USER\Control Panel\Mouse",
+            "MouseSensitivity",
+            FREE_FIRE_DRAG_SENS.ToString());
 
+        SystemParametersInfo(
+            SPI_SETMOUSESPEED,
+            0,
+            FREE_FIRE_DRAG_SENS,
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+        ForceMouseRefresh();
+    }
+    catch { }
+}
     }
 }
