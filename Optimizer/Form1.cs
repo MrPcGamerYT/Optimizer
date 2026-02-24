@@ -20,33 +20,44 @@ using System.Windows.Forms;
 
 namespace Optimizer
 {
-    public partial class Optimizer : Form
-    {
-     // ================= THREAD SAFE COLLECTIONS =================
-using System.Collections.Concurrent;
-using Microsoft.Win32;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
+    // ================= PRIORITY STORAGE =================
 
-// 🔁 Store original priorities (THREAD SAFE)
+// Store original priorities safely
 private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
     = new ConcurrentDictionary<int, ProcessPriorityClass>();
 
+// Store original CPU affinity
+private readonly ConcurrentDictionary<int, IntPtr> originalAffinity
+    = new ConcurrentDictionary<int, IntPtr>();
+
+
 // ================= PANEL MEMORY =================
+
+// Should remember last panel
 private bool rememberLastPanel = true;
+
+// Last opened panel name
 private string lastPanel = "homePnl";
 
-// ================= STORAGE ALERT =================
+// Storage alert tracking
 private int lastAlertLevel = -1;
 
-// ================= AIM OPTIMIZATION =================
+
+// ================= STATUS LABEL =================
+
+private void SetAdminStatus(string text, Color color)
+{
+    lblAdminStatus.Text = text;
+    lblAdminStatus.ForeColor = color;
+}
+
+
+// ================= SYSTEM & OPTIMIZATION =================
+
 private CancellationTokenSource aimBoostCTS;
+
 private readonly object restoreLock = new object();
 
-// FIX: prevent multiple timer resolution calls
-private bool timerResolutionActive = false;
-
-// ================= TRAY =================
 private System.Windows.Forms.Timer trayBlinkTimer;
 private bool trayBlinkState = false;
 
@@ -56,10 +67,8 @@ private Icon trayIconAlert;
 private NotifyIcon trayIcon;
 private ContextMenuStrip trayMenu;
 
-// ================= PING =================
 private System.Windows.Forms.Timer pingTimer;
 
-// ================= GAME MODE =================
 private CancellationTokenSource normalGameCTS;
 private CancellationTokenSource advancedGameCTS;
 private CancellationTokenSource emulatorCTS;
@@ -69,17 +78,19 @@ private bool advancedGameModeRunning = false;
 private bool suppressMinimizeEvent = false;
 private bool allowExit = false;
 
-// ================= PERFORMANCE TRACKING =================
 private float currentOverall = 0;
 private int targetOverall = 0;
 
+
 // ================= ORIGINAL MOUSE BACKUP =================
-private int originalMouseSpeed = 1;
-private int originalThreshold1 = 6;
-private int originalThreshold2 = 10;
-private int originalSensitivity = 10;
+
+private int originalMouseSpeed;
+private int originalThreshold1;
+private int originalThreshold2;
+private int originalSensitivity;
 
 private bool mouseSettingsSaved = false;
+private bool timerResolutionActive = false;
 
 
 // ================= WINDOWS API =================
@@ -89,14 +100,14 @@ private bool mouseSettingsSaved = false;
 private static extern IntPtr GetForegroundWindow();
 
 
-// FIX: must use OUT INT
+// MUST use OUT INT (correct)
 [DllImport("user32.dll")]
 private static extern int GetWindowThreadProcessId(
     IntPtr hWnd,
     out int lpdwProcessId);
 
 
-// FIX: overload for INT value
+// Apply mouse speed
 [DllImport("user32.dll", SetLastError = true)]
 private static extern bool SystemParametersInfo(
     int uiAction,
@@ -105,7 +116,7 @@ private static extern bool SystemParametersInfo(
     int fWinIni);
 
 
-// FIX: overload for INT ARRAY
+// Apply mouse acceleration
 [DllImport("user32.dll", SetLastError = true)]
 private static extern bool SystemParametersInfo(
     int uiAction,
@@ -114,7 +125,7 @@ private static extern bool SystemParametersInfo(
     int fWinIni);
 
 
-// ================= TIMER RESOLUTION =================
+// Timer resolution boost
 [DllImport("winmm.dll")]
 private static extern uint timeBeginPeriod(uint uMilliseconds);
 
@@ -122,7 +133,8 @@ private static extern uint timeBeginPeriod(uint uMilliseconds);
 private static extern uint timeEndPeriod(uint uMilliseconds);
 
 
-// ================= MOUSE CONSTANTS =================
+// ================= CONSTANTS =================
+
 private const int SPI_SETMOUSE = 0x0004;
 private const int SPI_SETMOUSESPEED = 0x0071;
 
