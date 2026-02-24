@@ -62,12 +62,24 @@ namespace Optimizer.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("100")]
-        public int transparencySlider {
+        public string transparencySlider {
             get {
-                return ((int)(this["transparencySlider"]));
+                return ((string)(this["transparencySlider"]));
             }
             set {
                 this["transparencySlider"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AimOptimize {
+            get {
+                return ((bool)(this["AimOptimize"]));
+            }
+            set {
+                this["AimOptimize"] = value;
             }
         }
     }
