@@ -1351,177 +1351,137 @@ private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
 }
 
         // ===============================
-// TOGGLE HANDLERS (ULTIMATE VERSION)
-// ===============================
-
-private void tgNormalGame_CheckedChanged(object sender, EventArgs e)
-{
-    try
-    {
-        if (tgNormalGame.Checked)
+        // TOGGLE HANDLERS
+        // ===============================
+        private void tgNormalGame_CheckedChanged(object sender, EventArgs e)
         {
-            // Disable other modes safely
-            if (tgAdvancedGame.Checked) tgAdvancedGame.Checked = false;
-            if (tgAdvancedEmulator.Checked) tgAdvancedEmulator.Checked = false;
+            if (tgNormalGame.Checked)
+            {
+                tgAdvancedGame.Checked = false;
+                tgAdvancedEmulator.Checked = false;
 
-            CancelCTS(ref advancedGameCTS);
-            CancelCTS(ref emulatorCTS);
+                advancedGameCTS?.Cancel();
+                emulatorCTS?.Cancel();
 
-            CancelCTS(ref normalGameCTS);
-            normalGameCTS = new CancellationTokenSource();
+                normalGameCTS = new CancellationTokenSource();
+                activeBoostTarget = null;
 
-            activeBoostTarget = null;
+                _ = NormalGameModeLoopAsync(normalGameCTS.Token);
 
-            _ = NormalGameModeLoopAsync(normalGameCTS.Token);
+                lblGameModeStatus.Text = "Normal Game Mode: ENABLED";
+                lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
+            }
+            else
+            {
+                normalGameCTS?.Cancel();
+                normalGameCTS = null;
 
-            UpdateStatusSafe(
-                "Normal Game Mode: ENABLED 🚀",
-                Color.DeepSkyBlue);
+                if (!AnyBoostModeActive())
+                    RestoreAllPriorities();
+
+                lblGameModeStatus.Text = "Normal Game Mode: DISABLED";
+                lblGameModeStatus.ForeColor = Color.Orange;
+            }
+
+            UpdateTrayBlinkState();
         }
-        else
+
+
+
+        private void tgAdvancedGame_CheckedChanged(object sender, EventArgs e)
         {
-            CancelCTS(ref normalGameCTS);
+            if (tgAdvancedGame.Checked)
+            {
+                tgNormalGame.Checked = false;
+                tgAdvancedEmulator.Checked = false;
 
-            if (!AnyBoostModeActive())
-                RestoreAllPriorities();
+                normalGameCTS?.Cancel();
+                emulatorCTS?.Cancel();
 
-            UpdateStatusSafe(
-                "Normal Game Mode: DISABLED",
-                Color.Orange);
+                advancedGameCTS = new CancellationTokenSource();
+                EnableAdvancedGameMode();
+
+                _ = AdvancedGameModeLoopAsync(advancedGameCTS.Token);
+            }
+            else
+            {
+                advancedGameCTS?.Cancel();
+                advancedGameCTS = null;
+
+                DisableAdvancedGameMode();
+                if (!AnyBoostModeActive())
+                    RestoreAllPriorities();
+                activeBoostTarget = null;
+            }
+
+            UpdateTrayBlinkState();
         }
-    }
-    catch { }
-
-    UpdateTrayBlinkState();
-}
 
 
 
-private void tgAdvancedGame_CheckedChanged(object sender, EventArgs e)
-{
-    try
-    {
-        if (tgAdvancedGame.Checked)
+        private void tgAdvancedEmulator_CheckedChanged(object sender, EventArgs e)
         {
-            if (tgNormalGame.Checked) tgNormalGame.Checked = false;
-            if (tgAdvancedEmulator.Checked) tgAdvancedEmulator.Checked = false;
+            if (tgAdvancedEmulator.Checked)
+            {
+                tgNormalGame.Checked = false;
+                tgAdvancedGame.Checked = false;
 
-            CancelCTS(ref normalGameCTS);
-            CancelCTS(ref emulatorCTS);
+                normalGameCTS?.Cancel();
+                advancedGameCTS?.Cancel();
 
-            CancelCTS(ref advancedGameCTS);
-            advancedGameCTS = new CancellationTokenSource();
+                emulatorCTS = new CancellationTokenSource();
+                _ = EmulatorBoostLoopAsync(emulatorCTS.Token);
+            }
+            else
+            {
+                emulatorCTS?.Cancel();
+                emulatorCTS = null;
 
-            activeBoostTarget = null;
+                if (!AnyBoostModeActive())
+                    RestoreAllPriorities();
 
-            EnableAdvancedGameMode();
+            }
 
-            _ = AdvancedGameModeLoopAsync(advancedGameCTS.Token);
-
-            UpdateStatusSafe(
-                "Advanced Game Mode: ENABLED ⚡",
-                Color.Lime);
+            UpdateTrayBlinkState();
         }
-        else
+
+
+        private void tgBgApps_CheckedChanged(object sender, EventArgs e)
         {
-            CancelCTS(ref advancedGameCTS);
+            if (tgBgApps.Checked)
+            {
+                // Prevent double-start
+                if (bgAppsCTS != null)
+                    return;
 
-            DisableAdvancedGameMode();
+                bgAppsCTS = new CancellationTokenSource();
+                _ = BackgroundAppsBoostLoopAsync(bgAppsCTS.Token);
 
-            if (!AnyBoostModeActive())
-                RestoreAllPriorities();
+                lblGameModeStatus.Text = "Background Apps Boost ENABLED";
+                lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
+            }
+            else
+            {
+                if (bgAppsCTS != null)
+                {
+                    bgAppsCTS.Cancel();
+                    bgAppsCTS.Dispose();
+                    bgAppsCTS = null;
+                }
 
-            activeBoostTarget = null;
+                if (!AnyBoostModeActive())
+                    RestoreAllPriorities();
 
-            UpdateStatusSafe(
-                "Advanced Game Mode: DISABLED",
-                Color.Orange);
+
+                lblGameModeStatus.Text = "Background Apps Boost DISABLED";
+                lblGameModeStatus.ForeColor = Color.Orange;
+            }
+
+            // ✅ ALWAYS update tray state
+            UpdateTrayBlinkState();
         }
-    }
-    catch { }
-
-    UpdateTrayBlinkState();
-}
 
 
-
-private void tgAdvancedEmulator_CheckedChanged(object sender, EventArgs e)
-{
-    try
-    {
-        if (tgAdvancedEmulator.Checked)
-        {
-            if (tgNormalGame.Checked) tgNormalGame.Checked = false;
-            if (tgAdvancedGame.Checked) tgAdvancedGame.Checked = false;
-
-            CancelCTS(ref normalGameCTS);
-            CancelCTS(ref advancedGameCTS);
-
-            CancelCTS(ref emulatorCTS);
-            emulatorCTS = new CancellationTokenSource();
-
-            activeBoostTarget = null;
-
-            _ = EmulatorBoostLoopAsync(emulatorCTS.Token);
-
-            UpdateStatusSafe(
-                "Advanced Emulator Mode: ENABLED 🕹",
-                Color.Lime);
-        }
-        else
-        {
-            CancelCTS(ref emulatorCTS);
-
-            if (!AnyBoostModeActive())
-                RestoreAllPriorities();
-
-            activeBoostTarget = null;
-
-            UpdateStatusSafe(
-                "Advanced Emulator Mode: DISABLED",
-                Color.Orange);
-        }
-    }
-    catch { }
-
-    UpdateTrayBlinkState();
-}
-
-
-
-private void tgBgApps_CheckedChanged(object sender, EventArgs e)
-{
-    try
-    {
-        if (tgBgApps.Checked)
-        {
-            if (bgAppsCTS != null)
-                return;
-
-            bgAppsCTS = new CancellationTokenSource();
-
-            _ = BackgroundAppsBoostLoopAsync(bgAppsCTS.Token);
-
-            UpdateStatusSafe(
-                "Background Apps Boost: ENABLED 🔧",
-                Color.DeepSkyBlue);
-        }
-        else
-        {
-            CancelCTS(ref bgAppsCTS);
-
-            if (!AnyBoostModeActive())
-                RestoreAllPriorities();
-
-            UpdateStatusSafe(
-                "Background Apps Boost: DISABLED",
-                Color.Orange);
-        }
-    }
-    catch { }
-
-    UpdateTrayBlinkState();
-}
 
         // ===============================
         // TRAY ICON & BLINK STATE
