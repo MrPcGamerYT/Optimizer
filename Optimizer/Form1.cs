@@ -40,44 +40,69 @@ namespace Optimizer
             lblAdminStatus.Text = text;
             lblAdminStatus.ForeColor = color;
         }
-        private readonly object restoreLock = new object();
-        private System.Windows.Forms.Timer trayBlinkTimer;
-        private bool trayBlinkState = false;
-        private Icon trayIconNormal;
-        private Icon trayIconAlert;
-        private CancellationTokenSource normalGameCTS;
-        private CancellationTokenSource advancedGameCTS;
-        private bool advancedGameModeRunning = false;
-        private NotifyIcon trayIcon;
-        private bool suppressMinimizeEvent = false;
-        private bool allowExit = false;
-        private ContextMenuStrip trayMenu;
-        private System.Windows.Forms.Timer pingTimer;
-        private CancellationTokenSource emulatorCTS;
-        [DllImport("user32.dll")]
-private static extern bool SystemParametersInfo(
-    uint uiAction,
-    uint uiParam,
-    int[] pvParam,
-    uint fWinIni);
+        // ================= SYSTEM & OPTIMIZATION DECLARATIONS =================
 
+private readonly object restoreLock = new object();
+
+private System.Windows.Forms.Timer trayBlinkTimer;
+private bool trayBlinkState = false;
+
+private Icon trayIconNormal;
+private Icon trayIconAlert;
+
+private NotifyIcon trayIcon;
+private ContextMenuStrip trayMenu;
+
+private System.Windows.Forms.Timer pingTimer;
+
+private CancellationTokenSource normalGameCTS;
+private CancellationTokenSource advancedGameCTS;
+private CancellationTokenSource emulatorCTS;
+private CancellationTokenSource bgAppsCTS;
+
+private bool advancedGameModeRunning = false;
+private bool suppressMinimizeEvent = false;
+private bool allowExit = false;
+
+private float currentOverall = 0;
+private int targetOverall = 0;
+
+
+// ================= WINDOWS API =================
+
+// Get foreground window
 [DllImport("user32.dll")]
 private static extern IntPtr GetForegroundWindow();
 
-[DllImport("user32.dll")]
-private static extern uint GetWindowThreadProcessId(
-    IntPtr hWnd,
-    out uint lpdwProcessId);
 
+// FIXED: must use OUT INT (not uint)
+[DllImport("user32.dll")]
+private static extern int GetWindowThreadProcessId(
+    IntPtr hWnd,
+    out int lpdwProcessId);
+
+
+// FIXED: must use INT[] not object
+[DllImport("user32.dll", SetLastError = true)]
+private static extern bool SystemParametersInfo(
+    int uiAction,
+    int uiParam,
+    int[] pvParam,
+    int fWinIni);
+
+
+// Timer resolution (input latency boost)
 [DllImport("winmm.dll")]
 private static extern uint timeBeginPeriod(uint uMilliseconds);
 
 [DllImport("winmm.dll")]
 private static extern uint timeEndPeriod(uint uMilliseconds);
 
-private const uint SPI_SETMOUSE = 0x0004;
-private const uint SPIF_UPDATEINIFILE = 0x01;
-private const uint SPIF_SENDCHANGE = 0x02;
+
+// Mouse optimization constants
+private const int SPI_SETMOUSE = 0x0004;
+private const int SPIF_UPDATEINIFILE = 0x01;
+private const int SPIF_SENDCHANGE = 0x02;
         private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
@@ -2340,55 +2365,69 @@ private void DisableProAimOptimization()
 
 private void DisableMouseAccelerationInstant()
 {
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "0");
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "0");
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "0");
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
+    try
+    {
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "0");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "0");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "0");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
 
-    int[] mouseParams = new int[] { 0, 0, 0 };
+        int[] mouseParams = new int[] { 0, 0, 0 };
 
-    SystemParametersInfo(
-        SPI_SETMOUSE,
-        0,
-        mouseParams,
-        SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+        SystemParametersInfo(
+            SPI_SETMOUSE,
+            0,
+            mouseParams,
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
-    ForceMouseRefresh();
+        ForceMouseRefresh();
+    }
+    catch { }
 }
 
 private void RestoreMouseDefaultsInstant()
 {
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "1");
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "6");
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "10");
-    Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
+    try
+    {
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "1");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "6");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "10");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
 
-    int[] mouseParams = new int[] { 6, 10, 1 };
+        int[] mouseParams = new int[] { 6, 10, 1 };
 
-    SystemParametersInfo(
-        SPI_SETMOUSE,
-        0,
-        mouseParams,
-        SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+        SystemParametersInfo(
+            SPI_SETMOUSE,
+            0,
+            mouseParams,
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
-    ForceMouseRefresh();
+        ForceMouseRefresh();
+    }
+    catch { }
 }
 
 private void ForceMouseRefresh()
 {
-    Cursor.Position = new Point(Cursor.Position.X + 1, Cursor.Position.Y);
-    Cursor.Position = new Point(Cursor.Position.X - 1, Cursor.Position.Y);
-}
-private void BoostActiveGameOnly()
-{
-    IntPtr hwnd = GetForegroundWindow();
-    if (hwnd == IntPtr.Zero) return;
-
-    GetWindowThreadProcessId(hwnd, out uint pid);
-
     try
     {
-        Process p = Process.GetProcessById((int)pid);
+        Cursor.Position = new Point(Cursor.Position.X + 1, Cursor.Position.Y);
+        Cursor.Position = new Point(Cursor.Position.X - 1, Cursor.Position.Y);
+    }
+    catch { }
+}
+
+private void BoostActiveGameOnly()
+{
+    try
+    {
+        IntPtr hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return;
+
+        int pid;
+        GetWindowThreadProcessId(hwnd, out pid);
+
+        Process p = Process.GetProcessById(pid);
 
         if (gameProcesses.Contains(p.ProcessName))
         {
@@ -2396,6 +2435,6 @@ private void BoostActiveGameOnly()
         }
     }
     catch { }
-}        
+}       
     }
 }
