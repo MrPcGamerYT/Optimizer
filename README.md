@@ -19,7 +19,7 @@ It is designed to improve system performance, clean junk files, boost games & em
 ![Game Mode Panel](https://github.com/MrPcGamerYT/Optimizer/blob/main/screenshots/game-mode.png)
 
 ### ⚙️ Settings Panel
-![Settings Panel](https://github.com/MrPcGamerYT/Optimizer/blob/main/screenshots/settings.png)
+![Settings Panel](https://github.com/MrPcGamerYT/Optimizer/blob/main/screenshots/settings.jpg)
 
 ### ℹ️️ Information Panel
 ![Information Panel](https://github.com/MrPcGamerYT/Optimizer/blob/main/screenshots/info.png)
