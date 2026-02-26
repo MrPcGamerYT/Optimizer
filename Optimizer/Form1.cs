@@ -1801,56 +1801,64 @@ namespace Optimizer
 
 
         private void InitTray()
+{
+    // Prevent duplicate initialization
+    if (trayIcon != null)
+        return;
+
+    trayMenu = new ContextMenuStrip();
+
+    // ===============================
+    // SHOW / RESTORE
+    // ===============================
+    trayMenu.Items.Add("Show Optimizer", null, (s, e) =>
+    {
+        RestoreFromTray();
+    });
+
+    trayMenu.Items.Add(new ToolStripSeparator());
+
+    // ===============================
+    // EXIT
+    // ===============================
+    trayMenu.Items.Add("Exit", null, (s, e) =>
+    {
+        allowExit = true;
+
+        try
         {
-            // Prevent duplicate initialization
             if (trayIcon != null)
-                return;
-
-            trayMenu = new ContextMenuStrip();
-
-            // ===============================
-            // SHOW / RESTORE
-            // ===============================
-            trayMenu.Items.Add("Show Optimizer", null, (s, e) =>
             {
-                RestoreFromTray();
-            });
-
-            trayMenu.Items.Add(new ToolStripSeparator());
-
-            // ===============================
-            // EXIT
-            // ===============================
-            trayMenu.Items.Add("Exit", null, (s, e) =>
-            {
-                allowExit = true;
-
-                try
-                {
-                    trayIcon.Visible = false;
-                    trayIcon.Dispose();
-                }
-                catch { }
-
-                Application.Exit();
-            });
-
-            // ===============================
-            // TRAY ICON
-            // ===============================
-            trayMenu.Items.Add("Exit", null, (s, e) =>
-            {
-                allowExit = true;
-                Application.Exit();
-            });
-
-            // Single restore handler
-            trayIcon.MouseClick += (s, e) =>
-            {
-                if (e.Button == MouseButtons.Left)
-                    RestoreFromTray();
-            };
+                trayIcon.Visible = false;
+                trayIcon.Dispose();
+                trayIcon = null;
+            }
         }
+        catch { }
+
+        Application.Exit();
+    });
+
+    // ===============================
+    // CREATE TRAY ICON  (FIX)
+    // ===============================
+    trayIcon = new NotifyIcon
+    {
+        Icon = this.Icon,
+        Text = "Optimizer",
+        ContextMenuStrip = trayMenu,
+        Visible = false
+    };
+
+    // ===============================
+    // CLICK HANDLER
+    // ===============================
+    trayIcon.MouseClick += (s, e) =>
+    {
+        if (e.Button == MouseButtons.Left)
+            RestoreFromTray();
+    };
+}
 
         private void RestoreFromTray()
         {
