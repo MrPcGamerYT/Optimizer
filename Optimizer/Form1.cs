@@ -31,6 +31,11 @@ namespace Optimizer
         // Lock for safe restore
         private readonly object restoreLock = new object();
 
+        // ================= MOUSE BACKUP =================
+        private string originalMouseSpeed;
+        private string originalThreshold1;
+        private string originalThreshold2;
+        private string originalSensitivity;
 
         // ===============================
         // 🧠 OPTIMIZER STATE FLAGS
