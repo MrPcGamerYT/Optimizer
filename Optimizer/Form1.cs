@@ -1730,13 +1730,34 @@ namespace Optimizer
             try
             {
                 // ===============================
-                // STOP AIM OPTIMIZATION
+                // MINIMIZE TO TRAY MODE
                 // ===============================
-                DisableProAimOptimization();
+                if (tgMinimizeToTray.Checked && !allowExit)
+                {
+                    e.Cancel = true;
+
+                    this.Hide();
+
+                    if (trayIcon != null)
+                    {
+                        trayIcon.Visible = true;
+                        trayIcon.Icon = trayIconNormal;
+                        trayIcon.Text = "Optimizer (Running in Background)";
+                    }
+
+                    SetAdminStatus("Optimizer Minimized to Tray", Color.DeepSkyBlue);
+
+                    return;
+                }
 
                 // ===============================
-                // CANCEL ALL BOOST MODES
+                // REAL EXIT MODE
                 // ===============================
+
+                allowExit = true;
+
+                DisableProAimOptimization();
+
                 normalGameCTS?.Cancel();
                 advancedGameCTS?.Cancel();
                 emulatorCTS?.Cancel();
@@ -1747,32 +1768,15 @@ namespace Optimizer
                 emulatorCTS?.Dispose();
                 bgAppsCTS?.Dispose();
 
-                normalGameCTS = null;
-                advancedGameCTS = null;
-                emulatorCTS = null;
-                bgAppsCTS = null;
-
-                // ===============================
-                // RESTORE ALL PROCESS PRIORITIES
-                // ===============================
                 RestoreAllPriorities();
 
-                // ===============================
-                // RESTORE SYSTEM SETTINGS
-                // ===============================
                 DisableAdvancedGameMode();
 
-                // ===============================
-                // STOP TIMERS
-                // ===============================
                 usageTimer?.Stop();
                 animationTimer?.Stop();
                 pingTimer?.Stop();
                 trayBlinkTimer?.Stop();
 
-                // ===============================
-                // CLEAN TRAY ICON
-                // ===============================
                 if (trayIcon != null)
                 {
                     trayIcon.Visible = false;
@@ -1834,13 +1838,11 @@ namespace Optimizer
             // ===============================
             // TRAY ICON
             // ===============================
-            trayIcon = new NotifyIcon
+            trayMenu.Items.Add("Exit", null, (s, e) =>
             {
-                Text = "Optimizer",
-                Icon = this.Icon,
-                ContextMenuStrip = trayMenu,
-                Visible = false
-            };
+                allowExit = true;
+                Application.Exit();
+            });
 
             // Single restore handler
             trayIcon.MouseClick += (s, e) =>
@@ -1858,6 +1860,8 @@ namespace Optimizer
 
             if (trayIcon != null)
                 trayIcon.Visible = false;
+
+            allowExit = false;
 
             SetAdminStatus("Restored from Tray", Color.Lime);
         }
