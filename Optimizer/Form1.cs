@@ -22,146 +22,149 @@ namespace Optimizer
 {
     public partial class Optimizer : Form
     {
-// ================= PRIORITY STORAGE =================
+        // ===============================
+        // 🔁 ORIGINAL PRIORITY STORAGE
+        // ===============================
+        private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities =
+            new ConcurrentDictionary<int, ProcessPriorityClass>();
 
-// Store original priorities safely
-private readonly ConcurrentDictionary<int, ProcessPriorityClass> originalPriorities
-    = new ConcurrentDictionary<int, ProcessPriorityClass>();
-
-// Store original CPU affinity safely
-private readonly ConcurrentDictionary<int, IntPtr> originalAffinity
-    = new ConcurrentDictionary<int, IntPtr>();
-
-
-// ================= PANEL MEMORY =================
-
-// Should remember last panel
-private bool rememberLastPanel = true;
-
-// Last opened panel name
-private string lastPanel = "homePnl";
-
-// Storage alert tracking
-private int lastAlertLevel = -1;
+        // Lock for safe restore
+        private readonly object restoreLock = new object();
 
 
-// ================= STATUS LABEL =================
+        // ===============================
+        // 🧠 OPTIMIZER STATE FLAGS
+        // ===============================
+        private bool normalGameModeRunning = false;
+        private bool advancedGameModeRunning = false;
+        private bool emulatorModeRunning = false;
+        private bool bgAppsModeRunning = false;
 
-private void SetAdminStatus(string text, Color color)
-{
-    if (InvokeRequired)
-    {
-        Invoke(new Action(() =>
+        // Master optimizer state
+        private volatile bool optimizerActive = false;
+
+        // Prevent optimizer from continuing after exit
+        private volatile bool exitRequested = false;
+
+
+        // ===============================
+        // ⏹️ CANCELLATION TOKENS (CRITICAL)
+        // ===============================
+        private CancellationTokenSource normalGameCTS;
+        private CancellationTokenSource advancedGameCTS;
+        private CancellationTokenSource emulatorCTS;
+        private CancellationTokenSource bgAppsCTS;
+
+
+        // ===============================
+        // 🖥️ UI / PANEL MEMORY
+        // ===============================
+        private bool rememberLastPanel = true;
+        private string lastPanel = "homePnl";
+
+
+        // ===============================
+        // 💾 STORAGE ALERT TRACKING
+        // ===============================
+        private int lastAlertLevel = -1;
+
+
+        // ===============================
+        // 🖱️ MOUSE OPTIMIZATION STORAGE
+        // ===============================
+        private uint[] originalMouseParams = new uint[3];
+        private bool mouseOptimized = false;
+
+
+        // ===============================
+        // 🎯 OVERALL OPTIMIZATION LEVEL
+        // ===============================
+        private float currentOverall = 0f;
+        private int targetOverall = 0;
+
+
+        // ===============================
+        // 🔔 TRAY ICON SYSTEM
+        // ===============================
+        private NotifyIcon trayIcon;
+        private ContextMenuStrip trayMenu;
+
+        private System.Windows.Forms.Timer trayBlinkTimer;
+        private bool trayBlinkState = false;
+
+        private Icon trayIconNormal;
+        private Icon trayIconAlert;
+
+        private bool suppressMinimizeEvent = false;
+        private bool allowExit = false;
+
+
+        // ===============================
+        // 🌐 NETWORK / PING TIMER
+        // ===============================
+        private System.Windows.Forms.Timer pingTimer;
+
+
+        // ===============================
+        // 🛠️ ADMIN STATUS LABEL HELPER
+        // ===============================
+        private void SetAdminStatus(string text, Color color)
         {
-            lblAdminStatus.Text = text;
-            lblAdminStatus.ForeColor = color;
-        }));
-    }
-    else
-    {
-        lblAdminStatus.Text = text;
-        lblAdminStatus.ForeColor = color;
-    }
-}
+            if (lblAdminStatus.InvokeRequired)
+            {
+                lblAdminStatus.Invoke(new Action(() =>
+                {
+                    lblAdminStatus.Text = text;
+                    lblAdminStatus.ForeColor = color;
+                }));
+            }
+            else
+            {
+                lblAdminStatus.Text = text;
+                lblAdminStatus.ForeColor = color;
+            }
+        }
 
 
-// ================= SYSTEM & OPTIMIZATION =================
+        // ===============================
+        // 🪟 WINDOWS API IMPORTS
+        // ===============================
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
 
-private CancellationTokenSource aimBoostCTS;
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(
+            IntPtr hWnd,
+            out int lpdwProcessId);
 
-private readonly object restoreLock = new object();
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SystemParametersInfo(
+            uint uiAction,
+            uint uiParam,
+            object pvParam,
+            uint fWinIni);
 
-private System.Windows.Forms.Timer trayBlinkTimer;
-private bool trayBlinkState = false;
+        [DllImport("winmm.dll")]
+        private static extern uint timeBeginPeriod(uint uMilliseconds);
 
-private Icon trayIconNormal;
-private Icon trayIconAlert;
-
-private NotifyIcon trayIcon;
-private ContextMenuStrip trayMenu;
-
-private System.Windows.Forms.Timer pingTimer;
-
-private CancellationTokenSource normalGameCTS;
-private CancellationTokenSource advancedGameCTS;
-private CancellationTokenSource emulatorCTS;
-private CancellationTokenSource bgAppsCTS;
-
-private bool advancedGameModeRunning = false;
-private bool suppressMinimizeEvent = false;
-private bool allowExit = false;
-
-private float currentOverall = 0;
-private int targetOverall = 0;
+        [DllImport("winmm.dll")]
+        private static extern uint timeEndPeriod(uint uMilliseconds);
 
 
-// ================= ORIGINAL MOUSE BACKUP =================
+        // ===============================
+        // 🎯 CONSTANTS
+        // ===============================
+        private const uint SPI_GETMOUSE = 0x0003;
+        private const uint SPI_SETMOUSE = 0x0004;
 
-private int originalMouseSpeed;
-private int originalThreshold1;
-private int originalThreshold2;
-private int originalSensitivity;
-
-private bool mouseSettingsSaved = false;
-private bool timerResolutionActive = false;
-
-
-// ================= WINDOWS API =================
-
-// Get foreground window
-[DllImport("user32.dll")]
-private static extern IntPtr GetForegroundWindow();
+        private const uint SPIF_UPDATEINIFILE = 0x01;
+        private const uint SPIF_SENDCHANGE = 0x02;
 
 
-// Get PID from window (CORRECT)
-[DllImport("user32.dll")]
-private static extern int GetWindowThreadProcessId(
-    IntPtr hWnd,
-    out int lpdwProcessId);
-
-
-// Apply mouse speed
-[DllImport("user32.dll", SetLastError = true)]
-private static extern bool SystemParametersInfo(
-    int uiAction,
-    int uiParam,
-    int pvParam,
-    int fWinIni);
-
-
-// Apply mouse acceleration
-[DllImport("user32.dll", SetLastError = true)]
-private static extern bool SystemParametersInfo(
-    int uiAction,
-    int uiParam,
-    int[] pvParam,
-    int fWinIni);
-
-
-// Timer resolution boost
-[DllImport("winmm.dll")]
-private static extern uint timeBeginPeriod(uint uMilliseconds);
-
-[DllImport("winmm.dll")]
-private static extern uint timeEndPeriod(uint uMilliseconds);
-
-
-// ================= CONSTANTS =================
-
-private const int SPI_SETMOUSE = 0x0004;
-private const int SPI_SETMOUSESPEED = 0x0071;
-
-private const int SPIF_UPDATEINIFILE = 0x01;
-private const int SPIF_SENDCHANGE = 0x02;
-
-
-// ================= PRO UPGRADE (NEW) =================
-
-// Prevent duplicate boost on same process
-private int lastBoostedPID = -1;
-
-// High precision timer for esports-level responsiveness
-private readonly Stopwatch boostStopwatch = new Stopwatch();
+        // ===============================
+        // 🔒 SAFE EXIT CLEANUP FLAG
+        // ===============================
+        private bool cleanupCompleted = false;
         private static readonly HashSet<string> ProtectedProcessNames =
     new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
@@ -287,6 +290,7 @@ private readonly Stopwatch boostStopwatch = new Stopwatch();
     "UE4",
     "UE5"
 };
+
         private bool IsProtectedProcess(Process p)
         {
             try
@@ -362,7 +366,6 @@ private readonly Stopwatch boostStopwatch = new Stopwatch();
         // ===============================
         // NORMAL GAME MODE
         // ===============================
-        private bool normalGameModeRunning = false;
         private volatile string activeBoostTarget = null;
 
         // Known PC game executables
@@ -702,100 +705,9 @@ private readonly Stopwatch boostStopwatch = new Stopwatch();
     "residentEvil5","residentEvil6","residentEvil7","amnesia","soma","outlast",
     "outlast2","alienisolation","theevilwithin","theevilwithin2","layersoffear",
     "layersoffear2","blairwitch","littlehope","manofmedan","darkpicturesmanofmedan",
-    "darkpictureshouseofashes","darkpicturesthedevilinme","amnesiarebirth",
+    "darkpictureshouseofashes","darkpicturesthedevilinme","amnesiarebirth"
     
     // Total: ~200+ games, final chunk
-    // ===== Official Vanilla =====
-    "minecraft",
-    "minecraftlauncher",
-    "minecraft-launcher",
-    "MinecraftLauncher",
-    "MinecraftLauncher.exe",
-    "Minecraft.exe",
-    "Minecraft.Windows",
-    "Minecraft.Windows.exe",
-    "MinecraftWindows",
-    "Win10Minecraft",
-    "java",
-    "javaw",
-    "java.exe",
-    "javaw.exe",
-
-    // ===== Lunar Client =====
-    "lunarclient",
-    "lunarclient-prod",
-    "lunarclient-updater",
-    "Lunar Client.exe",
-    "LunarClient.exe",
-
-    // ===== Badlion Client =====
-    "badlionclient",
-    "badlionclient.exe",
-    "Badlion Client.exe",
-    "BadlionClient.exe",
-    "BAC",
-    "BAC.exe",
-    "badlionanticheat",
-
-    // ===== TLauncher =====
-    "tlauncher",
-    "tlauncher.exe",
-    "tlauncher-mcl",
-    "TLauncher.exe",
-
-    // ===== SKLauncher =====
-    "sklauncher",
-    "sklauncher.exe",
-    "SKlauncher.exe",
-
-    // ===== MultiMC / Prism / PolyMC =====
-    "multimc",
-    "MultiMC.exe",
-    "prismlauncher",
-    "PrismLauncher.exe",
-    "polymlauncher",
-    "PolyMC.exe",
-
-    // ===== GDLauncher =====
-    "gdlauncher",
-    "gdlauncher.exe",
-    "GDLauncher.exe",
-
-    // ===== CurseForge =====
-    "curseforge",
-    "curseforge.exe",
-    "CurseForge.exe",
-
-    // ===== Feather Client =====
-    "feather",
-    "featherclient",
-    "Feather.exe",
-
-    // ===== LabyMod =====
-    "labymod",
-    "labymodlauncher",
-    "LabyMod.exe",
-
-    // ===== ATLauncher =====
-    "atlauncher",
-    "ATLauncher.exe",
-
-    // ===== Technic Launcher =====
-    "technic",
-    "techniclauncher",
-    "TechnicLauncher.exe",
-
-    // ===== FTB =====
-    "ftbapp",
-    "ftblauncher",
-    "FTBApp.exe",
-
-    // ===== HMCL =====
-    "hmcl",
-    "hmcl.exe",
-    "HMCL.exe"
-
-    
 };
         // Fast + no-duplicate game list
         private HashSet<string> gameExecutablesSet;
@@ -803,552 +715,646 @@ private readonly Stopwatch boostStopwatch = new Stopwatch();
         // ===============================
         // GAME BOOST UTILS
         // ===============================
+        private readonly ConcurrentDictionary<int, IntPtr> originalAffinity
+    = new ConcurrentDictionary<int, IntPtr>();
+
+        private int lastGamePID = -1;
+
         private void ApplyGameBoost(Process game, bool isAdvancedMode)
-{
-    try
-    {
-        if (game == null || game.HasExited)
-            return;
-
-        // ✅ SET ACTIVE TARGET SAFELY
-        activeBoostTarget = game.ProcessName;
-
-        // ✅ SAVE ORIGINAL PRIORITY ONCE
-        originalPriorities.AddOrUpdate(
-            game.Id,
-            game.PriorityClass,
-            (id, old) => old
-        );
-
-        // ✅ SAVE ORIGINAL AFFINITY ONCE
-        originalAffinity.AddOrUpdate(
-            game.Id,
-            game.ProcessorAffinity,
-            (id, old) => old
-        );
-
-        // ✅ APPLY HIGH PRIORITY
-        if (game.PriorityClass != ProcessPriorityClass.High)
-            game.PriorityClass = ProcessPriorityClass.High;
-
-        // ✅ APPLY FULL CPU AFFINITY (max performance)
-        IntPtr fullAffinity =
-            (IntPtr)((1L << Environment.ProcessorCount) - 1);
-
-        if (game.ProcessorAffinity != fullAffinity)
-            game.ProcessorAffinity = fullAffinity;
-
-        // ✅ LOWER BACKGROUND APPS SAFELY
-        foreach (Process p in Process.GetProcesses())
         {
             try
             {
-                if (p == null || p.HasExited)
-                    continue;
+                if (game == null || game.HasExited)
+                    return;
 
-                if (p.Id == game.Id)
-                    continue;
+                // Prevent duplicate boost
+                if (game.Id == lastGamePID)
+                    return;
 
-                if (IsProtectedProcess(p))
-                    continue;
+                lastGamePID = game.Id;
 
-                // Save original priority once only
-                originalPriorities.AddOrUpdate(
-                    p.Id,
-                    p.PriorityClass,
-                    (id, old) => old
-                );
+                activeBoostTarget = game.ProcessName;
 
-                if (p.PriorityClass != ProcessPriorityClass.BelowNormal)
-                    p.PriorityClass = ProcessPriorityClass.BelowNormal;
+                // Save original priority safely
+                originalPriorities.TryAdd(game.Id, game.PriorityClass);
+
+                // Save original affinity safely
+                originalAffinity.TryAdd(game.Id, game.ProcessorAffinity);
+
+                // NEXT-LEVEL PRIORITY BOOST
+                if (isAdvancedMode)
+                    game.PriorityClass = ProcessPriorityClass.High;
+                else
+                    game.PriorityClass = ProcessPriorityClass.AboveNormal;
+
+                // FULL CPU UNLOCK
+                IntPtr fullAffinity =
+                    (IntPtr)((1 << Environment.ProcessorCount) - 1);
+
+                game.ProcessorAffinity = fullAffinity;
+
+                // LOWER BACKGROUND PROCESSES SAFELY
+                foreach (Process p in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (p.HasExited)
+                            continue;
+
+                        if (p.Id == game.Id)
+                            continue;
+
+                        if (IsProtectedProcess(p))
+                            continue;
+
+                        originalPriorities.TryAdd(p.Id, p.PriorityClass);
+
+                        if (p.PriorityClass != ProcessPriorityClass.BelowNormal)
+                            p.PriorityClass = ProcessPriorityClass.BelowNormal;
+                    }
+                    catch { }
+                }
+
+                // Safe UI update
+                if (isAdvancedMode && IsHandleCreated && !IsDisposed)
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        lblGameModeStatus.Text =
+                            $"Advanced Boost Applied: {game.ProcessName} 🚀";
+
+                        lblGameModeStatus.ForeColor = Color.Lime;
+                    }));
+                }
             }
-            catch { }
-        }
-
-        // ✅ SAFE UI UPDATE
-        if (isAdvancedMode && IsHandleCreated && !IsDisposed)
-        {
-            BeginInvoke((Action)(() =>
+            catch
             {
-                lblGameModeStatus.Text =
-                    $"Game Mode Applied on {game.ProcessName} 🚀";
-
-                lblGameModeStatus.ForeColor = Color.Lime;
-            }));
+                lastGamePID = -1;
+            }
         }
-    }
-    catch { }
-}
 
 
 
 
 
         // ===============================
-        // NORMAL GAME MODE
+        // NORMAL GAME MODE (OPTIMIZED)
         // ===============================
-
-
         private async Task NormalGameModeLoopAsync(CancellationToken token)
-{
-    try
-    {
-        while (!token.IsCancellationRequested)
         {
-            bool found = false;
-
-            foreach (string gameName in gameExecutablesSet)
+            try
             {
-                Process p =
-                    Process.GetProcessesByName(gameName)
-                    .FirstOrDefault();
-
-                if (p != null && !p.HasExited)
+                while (!token.IsCancellationRequested)
                 {
-                    found = true;
+                    bool found = false;
 
-                    if (activeBoostTarget != p.ProcessName)
+                    foreach (string game in gameExecutablesSet)
                     {
-                        ApplyGameBoost(p, false);
+                        var process = Process.GetProcessesByName(game).FirstOrDefault();
+
+                        if (process != null && !process.HasExited)
+                        {
+                            found = true;
+
+                            if (activeBoostTarget != process.ProcessName)
+                                ApplyGameBoost(process, false);
+
+                            break;
+                        }
                     }
 
-                    break;
+                    if (!found && activeBoostTarget != null)
+                    {
+                        RestoreAllPriorities();
+                    }
+
+                    await Task.Delay(1500, token); // Faster detection
                 }
             }
-
-            if (!found)
-            {
-                activeBoostTarget = null;
-
-                if (!AnyBoostModeActive())
-                    RestoreAllPriorities();
-            }
-
-            await Task.Delay(2000, token);
+            catch (OperationCanceledException) { }
         }
-    }
-    catch (OperationCanceledException) { }
-}
+
 
 
         // ===============================
-        // ADVANCED GAME MODE
+        // ADVANCED GAME MODE (OPTIMIZED)
         // ===============================
-
-
         private async Task AdvancedGameModeLoopAsync(CancellationToken token)
-{
-    try
-    {
-        while (!token.IsCancellationRequested)
         {
-            bool found = false;
-
-            foreach (string gameName in gameExecutablesSet)
+            try
             {
-                Process p =
-                    Process.GetProcessesByName(gameName)
-                    .FirstOrDefault();
-
-                if (p != null && !p.HasExited)
+                while (!token.IsCancellationRequested)
                 {
-                    found = true;
+                    bool found = false;
 
-                    if (activeBoostTarget != p.ProcessName)
+                    foreach (string game in gameExecutablesSet)
                     {
-                        ApplyGameBoost(p, true);
+                        var process = Process.GetProcessesByName(game).FirstOrDefault();
+
+                        if (process != null && !process.HasExited)
+                        {
+                            found = true;
+
+                            if (activeBoostTarget != process.ProcessName)
+                                ApplyGameBoost(process, true);
+
+                            break;
+                        }
                     }
 
-                    break;
+                    if (!found)
+                    {
+                        if (activeBoostTarget != null)
+                            RestoreAllPriorities();
+
+                        if (IsHandleCreated && !IsDisposed)
+                        {
+                            BeginInvoke((Action)(() =>
+                            {
+                                lblGameModeStatus.Text =
+                                    "Advanced Game Mode: Waiting for Game…";
+                                lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
+                            }));
+                        }
+                    }
+
+                    await Task.Delay(1000, token); // Faster advanced scan
                 }
             }
-
-            if (!found)
+            catch (OperationCanceledException) { }
+            finally
             {
-                activeBoostTarget = null;
-
                 if (IsHandleCreated && !IsDisposed)
                 {
                     BeginInvoke((Action)(() =>
                     {
                         lblGameModeStatus.Text =
-                            "Advanced Game Mode: Waiting for Game…";
-
-                        lblGameModeStatus.ForeColor =
-                            Color.DeepSkyBlue;
+                            "Advanced Game Mode: DISABLED";
+                        lblGameModeStatus.ForeColor = Color.Orange;
                     }));
                 }
+            }
+        }
 
-                if (!AnyBoostModeActive())
-                    RestoreAllPriorities();
+
+        // ===============================
+        // SAFE RESTORE (IMPROVED)
+        // ===============================
+        private void RestoreAllPriorities()
+        {
+            foreach (var item in originalPriorities.ToArray())
+            {
+                try
+                {
+                    var p = Process.GetProcessById(item.Key);
+                    if (!p.HasExited)
+                        p.PriorityClass = item.Value;
+                }
+                catch { }
             }
 
-            await Task.Delay(1500, token);
+            originalPriorities.Clear();
+            activeBoostTarget = null;
         }
-    }
-    catch (OperationCanceledException) { }
-    finally
-    {
-        if (IsHandleCreated && !IsDisposed)
+
+
+        // ===============================
+        // MODE CHECK (CLEAN)
+        // ===============================
+        private bool AnyBoostModeActive()
         {
+            return tgAdvancedGame.Checked
+                   || tgAdvancedEmulator.Checked
+                   || tgNormalGame.Checked;
+        }
+
+
+
+
+        // ===============================
+        // EMULATOR BOOST MODE
+        // ===============================
+        private readonly string[] emulatorProcesses =
+        {
+        "HD-Player",        // BlueStacks / MSI App Player
+        "dnplayer",         // LDPlayer
+        "Nox",
+        "MEmu",
+        "AndroidEmulator"   // GameLoop
+        };
+
+        private void UpdateEmulatorStatus()
+        {
+            if (!tgAdvancedGame.Checked)
+                return;
+
+            if (!IsHandleCreated || IsDisposed)
+                return;
+
             BeginInvoke((Action)(() =>
             {
-                lblGameModeStatus.Text =
-                    "Advanced Game Mode: DISABLED";
+                foreach (string game in gameExecutablesSet)
+                {
+                    if (Process.GetProcessesByName(game).Length > 0)
+                    {
+                        lblGameModeStatus.Text = $"Game Mode Applied On {game}";
+                        lblGameModeStatus.ForeColor = Color.Lime;
+                        return;
+                    }
+                }
 
+                lblGameModeStatus.Text = "Waiting for Game…";
                 lblGameModeStatus.ForeColor = Color.Orange;
             }));
         }
-    }
-}
 
-        private void RestoreAllPriorities()
-{
-    try
-    {
-        foreach (var entry in originalPriorities.ToArray())
+
+        // ===============================
+        // EMULATOR BOOST MODE (OPTIMIZED)
+        // ===============================
+        private async Task EmulatorBoostLoopAsync(CancellationToken token)
         {
             try
             {
-                Process p =
-                    Process.GetProcessById(entry.Key);
-
-                if (!p.HasExited)
-                    p.PriorityClass = entry.Value;
-            }
-            catch { }
-        }
-
-        originalPriorities.Clear();
-
-        foreach (var entry in originalAffinity.ToArray())
-        {
-            try
-            {
-                Process p =
-                    Process.GetProcessById(entry.Key);
-
-                if (!p.HasExited)
-                    p.ProcessorAffinity = entry.Value;
-            }
-            catch { }
-        }
-
-        originalAffinity.Clear();
-
-        activeBoostTarget = null;
-    }
-    catch { }
-}
-
-
-        private bool AnyBoostModeActive()
-{
-    return
-        activeBoostTarget != null ||
-        tgAdvancedGame.Checked ||
-        tgAdvancedEmulator.Checked ||
-        tgNormalGame.Checked ||
-        tgBgApps.Checked;
-}
-
-
-
-
-       // ===============================
-// EMULATOR PROCESS LIST
-// ===============================
-private readonly string[] emulatorProcesses =
-{
-    "HD-Player",        // BlueStacks / MSI App Player
-    "dnplayer",         // LDPlayer
-    "Nox",
-    "MEmu",
-    "AndroidEmulator"   // GameLoop
-};
-
-
-// ===============================
-// UPDATE EMULATOR STATUS (SAFE)
-// ===============================
-private void UpdateEmulatorStatus()
-{
-    if (!tgAdvancedGame.Checked)
-        return;
-
-    if (!IsHandleCreated || IsDisposed)
-        return;
-
-    BeginInvoke((Action)(() =>
-    {
-        try
-        {
-            foreach (string game in gameExecutablesSet)
-            {
-                var proc = Process.GetProcessesByName(game).FirstOrDefault();
-
-                if (proc != null && !proc.HasExited)
+                while (!token.IsCancellationRequested)
                 {
-                    lblGameModeStatus.Text = $"Game Mode Applied On {proc.ProcessName}";
-                    lblGameModeStatus.ForeColor = Color.Lime;
-                    return;
-                }
-            }
+                    bool foundEmulator = false;
 
-            lblGameModeStatus.Text = "Waiting for Game…";
-            lblGameModeStatus.ForeColor = Color.Orange;
-        }
-        catch
-        {
-            lblGameModeStatus.Text = "Game Mode: Monitoring...";
-            lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
-        }
-    }));
-}
-
-
-// ===============================
-// ADVANCED EMULATOR BOOST LOOP (PRO SAFE VERSION)
-// ===============================
-private async Task EmulatorBoostLoopAsync(CancellationToken token)
-{
-    try
-    {
-        while (!token.IsCancellationRequested)
-        {
-            bool foundEmulator = false;
-
-            foreach (string emu in emulatorProcesses)
-            {
-                if (token.IsCancellationRequested)
-                    return;
-
-                Process emuProc = null;
-
-                try
-                {
-                    emuProc = Process.GetProcessesByName(emu).FirstOrDefault();
-                }
-                catch { }
-
-                if (emuProc != null && !emuProc.HasExited)
-                {
-                    foundEmulator = true;
-
-                    // Apply boost ONLY when target changes
-                    if (activeBoostTarget != emuProc.ProcessName)
+                    foreach (string emu in emulatorProcesses)
                     {
-                        activeBoostTarget = emuProc.ProcessName;
-                        ApplyGameBoost(emuProc, true);
-                    }
+                        var emuProc = Process.GetProcessesByName(emu).FirstOrDefault();
 
-                    if (IsHandleCreated && !IsDisposed)
-                    {
-                        BeginInvoke((Action)(() =>
+                        if (emuProc != null && !emuProc.HasExited)
                         {
-                            lblGameModeStatus.Text =
-                                $"Advanced Emulator Mode: {emuProc.ProcessName} Detected 🚀";
+                            foundEmulator = true;
 
-                            lblGameModeStatus.ForeColor = Color.Lime;
-                        }));
+                            if (activeBoostTarget != emuProc.ProcessName)
+                                ApplyGameBoost(emuProc, true);
+
+                            if (IsHandleCreated && !IsDisposed)
+                            {
+                                BeginInvoke((Action)(() =>
+                                {
+                                    lblGameModeStatus.Text =
+                                        $"Advanced Emulator Mode: {emuProc.ProcessName} 🚀";
+                                    lblGameModeStatus.ForeColor = Color.Lime;
+                                }));
+                            }
+
+                            break;
+                        }
                     }
 
-                    break;
+                    if (!foundEmulator && activeBoostTarget != null)
+                    {
+                        RestoreAllPriorities();
+
+                        if (IsHandleCreated && !IsDisposed)
+                        {
+                            BeginInvoke((Action)(() =>
+                            {
+                                lblGameModeStatus.Text =
+                                    "Advanced Emulator Mode: Waiting for Emulator…";
+                                lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
+                            }));
+                        }
+                    }
+
+                    await Task.Delay(1200, token); // Faster emulator detection
                 }
             }
-
-            // No emulator found
-            if (!foundEmulator)
+            catch (OperationCanceledException) { }
+            finally
             {
                 if (activeBoostTarget != null)
-                {
                     RestoreAllPriorities();
-                    activeBoostTarget = null;
-                }
 
                 if (IsHandleCreated && !IsDisposed)
                 {
                     BeginInvoke((Action)(() =>
                     {
                         lblGameModeStatus.Text =
-                            "Advanced Emulator Mode: Waiting for Emulator…";
-
-                        lblGameModeStatus.ForeColor = Color.DeepSkyBlue;
+                            "Advanced Emulator Mode: DISABLED";
+                        lblGameModeStatus.ForeColor = Color.Orange;
                     }));
                 }
             }
-
-            await Task.Delay(3000, token);
         }
-    }
-    catch (OperationCanceledException)
-    {
-        // Expected cancel
-    }
-    catch
-    {
-        // Silent protection
-    }
-    finally
-    {
-        RestoreAllPriorities();
-        activeBoostTarget = null;
 
-        if (IsHandleCreated && !IsDisposed)
+
+
+
+        // ===============================
+        // ADVANCED GAME MODE - NEXT LEVEL REALTIME SAFE SYSTEM
+        // FULL REPLACEABLE BLOCK
+        // ===============================
+
+        #region VARIABLES
+
+        private bool advancedGameModeEnabled = false;
+
+        private string backupPowerPlan = "";
+        private int backupVisualFX = 0;
+        private int backupThrottle = 0;
+
+        private System.Windows.Forms.Timer realtimeGuardTimer;
+
+        #endregion
+
+
+        #region INIT (CALL THIS IN FORM CONSTRUCTOR AFTER InitializeComponent)
+
+        private void InitAdvancedGameModeSystem()
         {
-            BeginInvoke((Action)(() =>
+            // Backup current settings at startup
+            BackupCurrentSettings();
+
+            // Create realtime guard
+            realtimeGuardTimer = new System.Windows.Forms.Timer();
+            realtimeGuardTimer.Interval = 2000; // every 2 sec
+            realtimeGuardTimer.Tick += RealtimeGuardTimer_Tick;
+
+            // Restore automatically if app crashes or closes
+            Application.ApplicationExit += OnAppExitRestore;
+            AppDomain.CurrentDomain.ProcessExit += OnAppExitRestore;
+            AppDomain.CurrentDomain.UnhandledException += OnAppCrashRestore;
+
+            // Guna2 Close Button protection
+            this.FormClosing += OnAppExitRestore;
+        }
+
+        #endregion
+
+
+        #region ENABLE ADVANCED GAME MODE
+
+        private void EnableAdvancedGameMode()
+        {
+            if (advancedGameModeEnabled)
+                return;
+
+            advancedGameModeEnabled = true;
+
+            BackupCurrentSettings();
+
+            try
             {
-                lblGameModeStatus.Text =
-                    "Advanced Emulator Mode: DISABLED";
+                // Ultimate Performance Power Plan
+                RunCommand("powercfg", "-setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
 
-                lblGameModeStatus.ForeColor = Color.Orange;
-            }));
-        }
-    }
-}
+                // Disable CPU Throttle
+                Registry.SetValue(
+                    @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                    "PowerThrottlingOff",
+                    1,
+                    RegistryValueKind.DWord);
 
+                // Best Performance Visual Effects
+                Registry.SetValue(
+                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
+                    "VisualFXSetting",
+                    2,
+                    RegistryValueKind.DWord);
 
-// ===============================
-// ENABLE ADVANCED GAME MODE (SAFE + PRO)
-// ===============================
-private void EnableAdvancedGameMode()
-{
-    try
-    {
-        // Ultimate Performance Power Plan
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "powercfg",
-                Arguments = "-setactive e9a42b02-d5df-448d-aa00-03f14749eb61",
-                CreateNoWindow = true,
-                UseShellExecute = false
-            });
-        }
-        catch { }
+                // High Priority for this optimizer
+                Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
 
-        // Disable CPU throttling
-        try
-        {
-            Registry.SetValue(
-                @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
-                "PowerThrottlingOff",
-                1,
-                RegistryValueKind.DWord);
-        }
-        catch { }
-
-        // Reduce visual effects
-        try
-        {
-            Registry.SetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
-                "VisualFXSetting",
-                2,
-                RegistryValueKind.DWord);
-        }
-        catch { }
-    }
-    catch { }
-}
-
-
-// ===============================
-// DISABLE ADVANCED GAME MODE (RESTORE SAFE)
-// ===============================
-private void DisableAdvancedGameMode()
-{
-    try
-    {
-        // Restore Balanced Plan
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "powercfg",
-                Arguments = "-setactive 381b4222-f694-41f0-9685-ff5bb260df2e",
-                CreateNoWindow = true,
-                UseShellExecute = false
-            });
-        }
-        catch { }
-
-        // Enable CPU throttling back
-        try
-        {
-            Registry.SetValue(
-                @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
-                "PowerThrottlingOff",
-                0,
-                RegistryValueKind.DWord);
-        }
-        catch { }
-
-        // Restore visual effects default
-        try
-        {
-            Registry.SetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
-                "VisualFXSetting",
-                1,
-                RegistryValueKind.DWord);
-        }
-        catch { }
-
-        RestoreAllPriorities();
-    }
-    catch { }
-}
-
-
-// ===============================
-// BACKGROUND APPS BOOST LOOP (PRO SAFE)
-// ===============================
-private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
-{
-    try
-    {
-        while (!token.IsCancellationRequested)
-        {
-            if (AnyBoostModeActive())
-            {
-                await Task.Delay(3000, token);
-                continue;
+                // Start realtime protection
+                realtimeGuardTimer.Start();
             }
+            catch { }
+        }
 
-            foreach (Process p in Process.GetProcesses())
+        #endregion
+
+
+        #region DISABLE ADVANCED GAME MODE
+
+        private void DisableAdvancedGameMode()
+        {
+            if (!advancedGameModeEnabled)
+                return;
+
+            advancedGameModeEnabled = false;
+
+            try
             {
-                if (token.IsCancellationRequested)
-                    return;
+                // Restore power plan
+                if (!string.IsNullOrEmpty(backupPowerPlan))
+                    RunCommand("powercfg", "-setactive " + backupPowerPlan);
 
-                try
+                // Restore throttle
+                Registry.SetValue(
+                    @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                    "PowerThrottlingOff",
+                    backupThrottle,
+                    RegistryValueKind.DWord);
+
+                // Restore visual FX
+                Registry.SetValue(
+                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
+                    "VisualFXSetting",
+                    backupVisualFX,
+                    RegistryValueKind.DWord);
+
+                realtimeGuardTimer.Stop();
+            }
+            catch { }
+        }
+
+        #endregion
+
+
+        #region REALTIME GUARD (PREVENT WINDOWS RESET)
+
+        private void RealtimeGuardTimer_Tick(object sender, EventArgs e)
+        {
+            if (!advancedGameModeEnabled)
+                return;
+
+            try
+            {
+                // Force ultimate performance continuously
+                RunCommand("powercfg", "-setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+
+                // Keep optimizer priority high
+                Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
+            }
+            catch { }
+        }
+
+        #endregion
+
+
+        #region BACKUP SYSTEM
+
+        private void BackupCurrentSettings()
+        {
+            try
+            {
+                backupPowerPlan = GetActivePowerPlan();
+
+                object fx = Registry.GetValue(
+                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
+                    "VisualFXSetting",
+                    1);
+
+                backupVisualFX = Convert.ToInt32(fx);
+
+                object throttle = Registry.GetValue(
+                    @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling",
+                    "PowerThrottlingOff",
+                    0);
+
+                backupThrottle = Convert.ToInt32(throttle);
+            }
+            catch { }
+        }
+
+        #endregion
+
+
+        #region AUTO RESTORE ON EXIT OR CRASH
+
+        private void OnAppExitRestore(object sender, EventArgs e)
+        {
+            DisableAdvancedGameMode();
+        }
+
+        private void OnAppCrashRestore(object sender, UnhandledExceptionEventArgs e)
+        {
+            DisableAdvancedGameMode();
+        }
+
+        #endregion
+
+
+        #region POWER PLAN DETECTOR
+
+        private string GetActivePowerPlan()
+        {
+            try
+            {
+                Process p = new Process();
+                p.StartInfo.FileName = "powercfg";
+                p.StartInfo.Arguments = "/getactivescheme";
+                p.StartInfo.RedirectStandardOutput = true;
+                p.StartInfo.UseShellExecute = false;
+                p.StartInfo.CreateNoWindow = true;
+                p.Start();
+
+                string output = p.StandardOutput.ReadToEnd();
+                p.WaitForExit();
+
+                int start = output.IndexOf(":") + 1;
+                int end = output.IndexOf("(");
+
+                return output.Substring(start, end - start).Trim();
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        #endregion
+
+
+        #region COMMAND RUNNER
+
+        private void RunCommand(string file, string args)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
                 {
-                    if (p == null || p.HasExited)
-                        continue;
-
-                    if (IsProtectedProcess(p))
-                        continue;
-
-                    if (originalPriorities.TryAdd(p.Id, p.PriorityClass))
-                    {
-                        p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                    }
-                }
-                catch { }
+                    FileName = file,
+                    Arguments = args,
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                });
             }
-
-            await Task.Delay(4000, token);
+            catch { }
         }
-    }
-    catch (OperationCanceledException)
-    {
-    }
-    finally
-    {
-        RestoreAllPriorities();
-    }
-}
+
+        #endregion
+
+        // ===============================
+        // BACKGROUND APPS BOOST (REALTIME SAFE)
+        // ===============================
+        private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    // 🚫 Pause if any other boost mode is active
+                    if (AnyBoostModeActive())
+                    {
+                        await Task.Delay(2000, token);
+                        continue;
+                    }
+
+                    Process[] processes;
+
+                    try
+                    {
+                        processes = Process.GetProcesses();
+                    }
+                    catch
+                    {
+                        await Task.Delay(2000, token);
+                        continue;
+                    }
+
+                    foreach (Process p in processes)
+                    {
+                        if (token.IsCancellationRequested)
+                            break;
+
+                        try
+                        {
+                            if (p == null || p.HasExited)
+                                continue;
+
+                            if (IsProtectedProcess(p))
+                                continue;
+
+                            // Save original priority ONLY once
+                            if (!originalPriorities.ContainsKey(p.Id))
+                            {
+                                originalPriorities[p.Id] = p.PriorityClass;
+                            }
+
+                            // Apply boost only if needed
+                            if (p.PriorityClass != ProcessPriorityClass.BelowNormal)
+                            {
+                                p.PriorityClass = ProcessPriorityClass.BelowNormal;
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore access denied / system process errors
+                        }
+                    }
+
+                    // Faster refresh = more realtime
+                    await Task.Delay(2500, token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancel
+            }
+            finally
+            {
+                // Restore priorities safely when stopped
+                RestoreAllPriorities();
+            }
+        }
+
+
+
 
         // ===============================
         // TOGGLE HANDLERS
@@ -1488,31 +1494,62 @@ private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
         // ===============================
         private void UpdateTrayBlinkState()
         {
+            if (trayIcon == null)
+                return;
+
             bool active =
                 tgNormalGame.Checked ||
                 tgAdvancedGame.Checked ||
                 tgAdvancedEmulator.Checked ||
                 tgBgApps.Checked;
 
+            // Set tray text safely (max 63 chars recommended)
             if (tgAdvancedEmulator.Checked)
                 trayIcon.Text = "Advanced Emulator Mode ACTIVE";
             else if (tgAdvancedGame.Checked)
                 trayIcon.Text = "Advanced Game Mode ACTIVE";
             else if (tgNormalGame.Checked)
                 trayIcon.Text = "Normal Game Mode ACTIVE";
+            else if (tgBgApps.Checked)
+                trayIcon.Text = "Background Boost ACTIVE";
             else
                 trayIcon.Text = "Game Mode OFF";
 
             if (active)
             {
                 trayIcon.Visible = true;
-                StartTrayBlink();
+
+                if (!trayBlinkTimer.Enabled)
+                    StartTrayBlink();
             }
             else
             {
                 StopTrayBlink();
                 trayIcon.Visible = false;
             }
+        }
+
+
+        // ===============================
+        // TRAY BLINK CONTROLS
+        // ===============================
+        private void StartTrayBlink()
+        {
+            if (trayBlinkTimer == null)
+                return;
+
+            trayBlinkTimer.Start();
+        }
+
+        private void StopTrayBlink()
+        {
+            if (trayBlinkTimer == null)
+                return;
+
+            trayBlinkTimer.Stop();
+
+            if (trayIcon != null)
+                trayIcon.Icon = trayIconNormal;
         }
 
 
@@ -1527,16 +1564,15 @@ private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
         // ===============================
         // SMOOTHING VARIABLES
         // ===============================
-        // Higher value = faster/snappier, Lower value = smoother/slower
         private const float smoothing = 0.12f;
 
-        private float currentCpu = 0;
+        private float currentCpu = 0f;
         private int targetCpu = 0;
 
-        private float currentRam = 0;
+        private float currentRam = 0f;
         private int targetRam = 0;
 
-        private float currentDrive = 0;
+        private float currentDrive = 0f;
         private int targetDriveUsage = 0;
 
         // ===============================
@@ -1545,6 +1581,8 @@ private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
         private PerformanceCounter cpuCounter;
         private DriveInfo systemDrive;
         private System.Windows.Forms.Timer animationTimer;
+
+
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         private class MEMORYSTATUSEX
@@ -1558,211 +1596,270 @@ private async Task BackgroundAppsBoostLoopAsync(CancellationToken token)
             public ulong ullTotalVirtual;
             public ulong ullAvailVirtual;
             public ulong ullAvailExtendedVirtual;
-            public MEMORYSTATUSEX() { this.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX)); }
+
+            public MEMORYSTATUSEX()
+            {
+                dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+            }
         }
 
         [DllImport("kernel32.dll")]
-        static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+        private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
 
         private void LoadSavedSettings()
         {
-            suppressMinimizeEvent = true;
+            try
+            {
+                // Prevent toggle events while loading
+                suppressMinimizeEvent = true;
 
-            tgMinimizeToTray.Checked = Properties.Settings.Default.MinimizeToTray;
-            tgReduceAnimations.Checked = Properties.Settings.Default.ReduceAnimations;
+                // ===============================
+                // LOAD UI SETTINGS SAFELY
+                // ===============================
+                if (Properties.Settings.Default != null)
+                {
+                    tgMinimizeToTray.Checked =
+                        Properties.Settings.Default.MinimizeToTray;
 
-            suppressMinimizeEvent = false;
+                    tgReduceAnimations.Checked =
+                        Properties.Settings.Default.ReduceAnimations;
+
+                    tgAimOptimize.Checked =
+                        Properties.Settings.Default.AimOptimize;
+                }
+            }
+            catch (Exception)
+            {
+                // If settings corrupted → reset safely
+                try
+                {
+                    Properties.Settings.Default.Reset();
+                }
+                catch { }
+            }
+            finally
+            {
+                // Re-enable events
+                suppressMinimizeEvent = false;
+            }
         }
 
 
-        // ===============================
-// CONSTRUCTOR (FULL SAFE INIT)
-// ===============================
-public Optimizer()
-{
-    InitializeComponent();
-
-    InitCounters();
-
-    LoadSystemInfo();
-
-    InitTray();
-
-    tip = new ToolTip();
-
-    systemDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
-
-    trayIconNormal = this.Icon;
-    trayIconAlert = Properties.Resources.Icon;
-
-    LoadSavedSettings();
-
-    // ===============================
-    // PING TIMER
-    // ===============================
-    pingTimer = new System.Windows.Forms.Timer();
-    pingTimer.Interval = 1000;
-    pingTimer.Tick += PingTimer_Tick;
-    pingTimer.Start();
-
-
-    // ===============================
-    // USAGE TIMER
-    // ===============================
-    usageTimer.Interval = 1000;
-    usageTimer.Tick += UsageTimer_Tick;
-    usageTimer.Start();
-
-
-    // ===============================
-    // ANIMATION TIMER
-    // ===============================
-    animationTimer = new System.Windows.Forms.Timer();
-    animationTimer.Interval = 16;
-    animationTimer.Tick += AnimationTimer_Tick;
-    animationTimer.Start();
-
-
-    // ===============================
-    // TRAY BLINK TIMER
-    // ===============================
-    trayBlinkTimer = new System.Windows.Forms.Timer();
-    trayBlinkTimer.Interval = 500;
-
-    trayBlinkTimer.Tick += (s, e) =>
-    {
-        if (trayIcon == null)
-            return;
-
-        trayBlinkState = !trayBlinkState;
-
-        trayIcon.Icon =
-            trayBlinkState
-            ? trayIconAlert
-            : trayIconNormal;
-    };
-
-
-    // ===============================
-    // WINDOW LOCK SIZE
-    // ===============================
-    this.MaximumSize = this.Size;
-    this.MinimumSize = this.Size;
-
-
-    lblVersion.Text = Application.ProductVersion;
-
-
-    // ===============================
-    // GAME SET INIT
-    // ===============================
-    gameExecutablesSet = new HashSet<string>(
-        gameExecutables.Select(g => g.ToLower())
-    );
-
-
-    lblDriveCTitle.Text =
-        $"{systemDrive.VolumeLabel} ({systemDrive.Name.TrimEnd('\\')})";
-
-
-    // ===============================
-    // AUTO AIM OPT ENABLE
-    // ===============================
-    if (Properties.Settings.Default.AimOptimize)
-    {
-        EnableProAimOptimization();
-    }
-
-    // ===============================
-    // CHECK UPDATE (SAFE BACKGROUND)
-    // ===============================
-    Task.Run(() =>
-    {
-        try
+        public Optimizer()
         {
+            InitializeComponent();
+
+            this.FormClosing += Optimizer_FormClosing;
+
+            InitCounters();
+            LoadSystemInfo();
+
+            // ===============================
+            // PING TIMER
+            // ===============================
+            pingTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 1000
+            };
+            pingTimer.Tick += PingTimer_Tick;
+            pingTimer.Start();
+
+            InitTray();
+
+            tip = new ToolTip();
+
+            systemDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
+
             Updater.CheckAndUpdate();
+
+            lblDriveCTitle.Text =
+                $"{systemDrive.VolumeLabel} ({systemDrive.Name.TrimEnd('\\')})";
+
+            // ===============================
+            // USAGE TIMER
+            // ===============================
+            usageTimer.Interval = 1000;
+            usageTimer.Tick += UsageTimer_Tick;
+            usageTimer.Start();
+
+            // ===============================
+            // ANIMATION TIMER (60 FPS)
+            // ===============================
+            animationTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 16
+            };
+            animationTimer.Tick += AnimationTimer_Tick;
+            animationTimer.Start();
+
+            trayIconNormal = this.Icon;
+            trayIconAlert = Properties.Resources.Icon;
+
+            LoadSavedSettings();
+
+            trayBlinkTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 500
+            };
+
+            trayBlinkTimer.Tick += (s, e) =>
+            {
+                if (trayIcon == null) return;
+
+                trayBlinkState = !trayBlinkState;
+                trayIcon.Icon = trayBlinkState
+                    ? trayIconAlert
+                    : trayIconNormal;
+            };
+
+            this.MaximumSize = this.Size;
+            this.MinimumSize = this.Size;
+
+            lblVersion.Text = Application.ProductVersion;
+
+            tgAimOptimize.Checked = Properties.Settings.Default.AimOptimize;
+
+            gameExecutablesSet = new HashSet<string>(
+                gameExecutables.Select(g => g.ToLower())
+            );
         }
-        catch { }
-    });
-}
+
+        private void Optimizer_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            try
+            {
+                // ===============================
+                // STOP AIM OPTIMIZATION
+                // ===============================
+                DisableProAimOptimization();
+
+                // ===============================
+                // CANCEL ALL BOOST MODES
+                // ===============================
+                normalGameCTS?.Cancel();
+                advancedGameCTS?.Cancel();
+                emulatorCTS?.Cancel();
+                bgAppsCTS?.Cancel();
+
+                normalGameCTS?.Dispose();
+                advancedGameCTS?.Dispose();
+                emulatorCTS?.Dispose();
+                bgAppsCTS?.Dispose();
+
+                normalGameCTS = null;
+                advancedGameCTS = null;
+                emulatorCTS = null;
+                bgAppsCTS = null;
+
+                // ===============================
+                // RESTORE ALL PROCESS PRIORITIES
+                // ===============================
+                RestoreAllPriorities();
+
+                // ===============================
+                // RESTORE SYSTEM SETTINGS
+                // ===============================
+                DisableAdvancedGameMode();
+
+                // ===============================
+                // STOP TIMERS
+                // ===============================
+                usageTimer?.Stop();
+                animationTimer?.Stop();
+                pingTimer?.Stop();
+                trayBlinkTimer?.Stop();
+
+                // ===============================
+                // CLEAN TRAY ICON
+                // ===============================
+                if (trayIcon != null)
+                {
+                    trayIcon.Visible = false;
+                    trayIcon.Dispose();
+                }
+            }
+            catch { }
+        }
 
         protected override void WndProc(ref Message m)
         {
             const int WM_SYSCOMMAND = 0x0112;
             const int SC_MAXIMIZE = 0xF030;
 
-            if (m.Msg == WM_SYSCOMMAND && (int)m.WParam == SC_MAXIMIZE)
+            if (m.Msg == WM_SYSCOMMAND && ((int)m.WParam & 0xFFF0) == SC_MAXIMIZE)
             {
-                return; // ❌ block maximize
+                return; // Block maximize completely
             }
 
             base.WndProc(ref m);
         }
 
-        private void StartTrayBlink()
-        {
-            trayBlinkState = false;
-            trayBlinkTimer.Start();
-        }
-
-        private void StopTrayBlink()
-        {
-            trayBlinkTimer.Stop();
-            trayIcon.Icon = trayIconNormal;
-        }
-
-
 
         private void InitTray()
         {
+            // Prevent duplicate initialization
+            if (trayIcon != null)
+                return;
+
             trayMenu = new ContextMenuStrip();
 
-            // Restore
+            // ===============================
+            // SHOW / RESTORE
+            // ===============================
             trayMenu.Items.Add("Show Optimizer", null, (s, e) =>
             {
-                this.Show();
-                this.WindowState = FormWindowState.Normal;
-                trayIcon.Visible = false;
-
-                SetAdminStatus("Restored from Tray", Color.Lime);
+                RestoreFromTray();
             });
 
             trayMenu.Items.Add(new ToolStripSeparator());
 
-            // Exit
+            // ===============================
+            // EXIT
+            // ===============================
             trayMenu.Items.Add("Exit", null, (s, e) =>
             {
                 allowExit = true;
-                trayIcon.Visible = false;
+
+                try
+                {
+                    trayIcon.Visible = false;
+                    trayIcon.Dispose();
+                }
+                catch { }
+
                 Application.Exit();
             });
 
+            // ===============================
+            // TRAY ICON
+            // ===============================
             trayIcon = new NotifyIcon
             {
                 Text = "Optimizer",
-                Icon = this.Icon, // uses your app icon
+                Icon = this.Icon,
                 ContextMenuStrip = trayMenu,
                 Visible = false
             };
 
-            // Double-click to restore
-            trayIcon.DoubleClick += (s, e) =>
-            {
-                this.Show();
-                this.WindowState = FormWindowState.Normal;
-                trayIcon.Visible = false;
-            };
+            // Single restore handler
             trayIcon.MouseClick += (s, e) =>
             {
                 if (e.Button == MouseButtons.Left)
-                {
-                    this.Show();
-                    this.WindowState = FormWindowState.Normal;
-                    trayIcon.Visible = false;
-                }
+                    RestoreFromTray();
             };
+        }
 
+        private void RestoreFromTray()
+        {
+            this.Show();
+            this.WindowState = FormWindowState.Normal;
+            this.BringToFront();
+
+            if (trayIcon != null)
+                trayIcon.Visible = false;
+
+            SetAdminStatus("Restored from Tray", Color.Lime);
         }
 
         protected override void OnResize(EventArgs e)
@@ -2027,46 +2124,110 @@ public Optimizer()
         private void guna2Button6_Click(object s, EventArgs e) => ShowPanel(infopnl, "infopnl");
 
 
+        // ===============================
+        // CLEAN BUTTON
+        // ===============================
         private void btnCleanNow_Click_1(object sender, EventArgs e)
         {
-            Task.Run(() =>
+            Task.Run(async () =>
             {
-                bool anyChecked = chkTemp.Checked || chkWinTemp.Checked || chkPrefetch.Checked || chkBrowser.Checked || chkRecycle.Checked;
+                bool anyChecked =
+                    chkTemp.Checked ||
+                    chkWinTemp.Checked ||
+                    chkPrefetch.Checked ||
+                    chkBrowser.Checked ||
+                    chkRecycle.Checked;
+
+                if (!anyChecked)
+                {
+                    SafeUI(() =>
+                    {
+                        ShowCleanPopup("Nothing Selected ❌", Color.OrangeRed);
+                    });
+                    return;
+                }
+
+                int cleaned = 0;
+
                 try
                 {
-                    if (chkTemp.Checked) CleanFolder(Path.GetTempPath());
-                    if (chkWinTemp.Checked) CleanFolder(@"C:\Windows\Temp");
-                    if (chkPrefetch.Checked) CleanFolder(@"C:\Windows\Prefetch");
-                    if (chkBrowser.Checked) CleanFolder(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Google\Chrome\User Data\Default\Cache");
-                    if (chkRecycle.Checked) SHEmptyRecycleBin(IntPtr.Zero, null, RecycleFlags.SHERB_NOCONFIRMATION | RecycleFlags.SHERB_NOPROGRESSUI | RecycleFlags.SHERB_NOSOUND);
+                    if (chkTemp.Checked)
+                    {
+                        CleanFolder(Path.GetTempPath());
+                        cleaned++;
+                    }
+
+                    if (chkWinTemp.Checked)
+                    {
+                        CleanFolder(@"C:\Windows\Temp");
+                        cleaned++;
+                    }
+
+                    if (chkPrefetch.Checked)
+                    {
+                        CleanFolder(@"C:\Windows\Prefetch");
+                        cleaned++;
+                    }
+
+                    if (chkBrowser.Checked)
+                    {
+                        string chrome =
+                            Path.Combine(
+                                Environment.GetFolderPath(
+                                    Environment.SpecialFolder.LocalApplicationData),
+                                @"Google\Chrome\User Data\Default\Cache");
+
+                        CleanFolder(chrome);
+                        cleaned++;
+                    }
+
+                    if (chkRecycle.Checked)
+                    {
+                        SHEmptyRecycleBin(
+                            IntPtr.Zero,
+                            null,
+                            RecycleFlags.SHERB_NOCONFIRMATION |
+                            RecycleFlags.SHERB_NOPROGRESSUI |
+                            RecycleFlags.SHERB_NOSOUND);
+
+                        cleaned++;
+                    }
                 }
                 catch { }
 
-                this.Invoke((Action)(() =>
+                SafeUI(() =>
                 {
-                    if (anyChecked) ShowCleanPopup("Clean Completed ✔", Color.Lime);
-                    else ShowCleanPopup("Nothing Selected ❌", Color.OrangeRed);
+                    ShowCleanPopup(
+                        $"Clean Completed ✔ ({cleaned})",
+                        Color.Lime);
 
-                    // ✅ RESET CHECKBOXES
                     ResetCleanerCheckboxes();
+                });
 
-                }));
             });
         }
 
         private async void ShowCleanPopup(string message, Color color)
         {
+            if (IsDisposed) return;
+
             lblCleanStatus.Text = message;
             lblCleanStatus.ForeColor = color;
             lblCleanStatus.Visible = true;
-            await Task.Delay(2000);
-            for (int i = 100; i >= 0; i -= 5)
+
+            await Task.Delay(1800);
+
+            for (int i = 255; i >= 0; i -= 8)
             {
-                lblCleanStatus.ForeColor = Color.FromArgb(i, color.R, color.G, color.B);
-                await Task.Delay(30);
+                if (IsDisposed) return;
+
+                lblCleanStatus.ForeColor =
+                    Color.FromArgb(i, color);
+
+                await Task.Delay(15);
             }
+
             lblCleanStatus.Visible = false;
-            lblCleanStatus.ForeColor = color;
         }
 
         [DllImport("psapi.dll")]
@@ -2076,19 +2237,27 @@ public Optimizer()
         {
             Task.Run(() =>
             {
+                int boosted = 0;
+
                 foreach (Process p in Process.GetProcesses())
                 {
                     try
                     {
+                        if (p.HasExited)
+                            continue;
+
                         EmptyWorkingSet(p.Handle);
+                        boosted++;
                     }
                     catch { }
                 }
 
-                this.Invoke((Action)(() =>
+                SafeUI(() =>
                 {
-                    ShowBoostPopup("RAM Boosted 🚀", Color.DeepSkyBlue);
-                }));
+                    ShowBoostPopup(
+                        $"RAM Boosted 🚀 ({boosted})",
+                        Color.DeepSkyBlue);
+                });
             });
         }
 
@@ -2101,8 +2270,8 @@ public Optimizer()
 
                 try
                 {
-                    // 🎯 Get foreground process
                     IntPtr hwnd = GetForegroundWindow();
+
                     if (hwnd != IntPtr.Zero)
                     {
                         GetWindowThreadProcessId(hwnd, out int pid);
@@ -2116,84 +2285,106 @@ public Optimizer()
                             if (p.HasExited)
                                 continue;
 
-                            // ❌ Never kill foreground app
-                            if (foreground != null && p.Id == foreground.Id)
+                            if (foreground != null &&
+                                p.Id == foreground.Id)
                                 continue;
 
-                            // ❌ Never kill Optimizer itself
-                            if (p.Id == Process.GetCurrentProcess().Id)
+                            if (p.Id ==
+                                Process.GetCurrentProcess().Id)
                                 continue;
 
-                            // ❌ Never kill protected/system/game/emulator apps
                             if (IsProtectedProcess(p))
                                 continue;
 
-                            // ❌ Skip critical priorities
-                            if (p.PriorityClass == ProcessPriorityClass.RealTime ||
-                                p.PriorityClass == ProcessPriorityClass.High)
+                            if (p.PriorityClass ==
+                                ProcessPriorityClass.RealTime ||
+                                p.PriorityClass ==
+                                ProcessPriorityClass.High)
                                 continue;
 
-                            // 💀 KILL background app
                             p.Kill();
                             killedCount++;
                         }
-                        catch
-                        {
-                            // ignore access denied / protected processes
-                        }
+                        catch { }
                     }
                 }
-                catch
-                {
-                    // ignore global errors
-                }
+                catch { }
 
-                // 🖥 UI UPDATE
-                if (!IsDisposed && IsHandleCreated)
+                SafeUI(() =>
                 {
-                    BeginInvoke((Action)(() =>
-                    {
-                        lblGameModeStatus.Text = $"Background Apps KILLED ({killedCount})";
-                        lblGameModeStatus.ForeColor = Color.Red;
+                    lblGameModeStatus.Text =
+                        $"Background Apps KILLED ({killedCount})";
 
-                        ShowBoostPopup(
-                            $"Killed {killedCount} Background Apps 💀",
-                            Color.Red
-                        );
-                    }));
-                }
+                    lblGameModeStatus.ForeColor =
+                        Color.Red;
+
+                    ShowBoostPopup(
+                        $"Killed {killedCount} Background Apps 💀",
+                        Color.Red);
+                });
+
             });
         }
 
 
+        private void SafeUI(Action action)
+        {
+            if (IsDisposed) return;
 
+            if (InvokeRequired)
+                BeginInvoke(action);
+            else
+                action();
+        }
 
 
         private void btnHighPerf_Click(object sender, EventArgs e)
         {
-            Process.Start(new ProcessStartInfo
+            Task.Run(() =>
             {
-                FileName = "powercfg",
-                Arguments = "-setactive SCHEME_MIN",
-                Verb = "runas",
-                CreateNoWindow = true,
-                UseShellExecute = true
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "powercfg",
+                        Arguments = "-setactive SCHEME_MIN",
+                        Verb = "runas",
+                        CreateNoWindow = true,
+                        UseShellExecute = true
+                    });
+
+                    SafeUI(() =>
+                    {
+                        ShowBoostPopup(
+                            "High Performance Enabled ⚡",
+                            Color.Lime);
+                    });
+                }
+                catch { }
             });
         }
 
         private async void ShowBoostPopup(string message, Color color)
         {
+            if (IsDisposed) return;
+
             lblBoostStatus.Text = message;
             lblBoostStatus.ForeColor = color;
             lblBoostStatus.Visible = true;
-            await Task.Delay(2000);
-            for (int i = 100; i >= 0; i -= 5)
+
+            await Task.Delay(1800);
+
+            for (int i = 255; i >= 0; i -= 8)
             {
-                lblBoostStatus.ForeColor = Color.FromArgb(i, color.R, color.G, color.B);
-                await Task.Delay(30);
+                if (IsDisposed) return;
+
+                lblBoostStatus.ForeColor =
+                    Color.FromArgb(i, color);
+
+                await Task.Delay(15);
             }
+
             lblBoostStatus.Visible = false;
-            lblBoostStatus.ForeColor = color;
         }
 
         private void label4_Click(object sender, EventArgs e)
@@ -2208,41 +2399,64 @@ public Optimizer()
                 try
                 {
                     IntPtr hwnd = GetForegroundWindow();
+                    if (hwnd == IntPtr.Zero)
+                        return;
+
                     GetWindowThreadProcessId(hwnd, out int pid);
 
                     Process fg = Process.GetProcessById(pid);
-                    fg.PriorityClass = ProcessPriorityClass.High;
+
+                    if (fg == null || fg.HasExited)
+                        return;
+
+                    // 🔥 Set foreground to HIGH (safe limit)
+                    if (fg.PriorityClass != ProcessPriorityClass.High)
+                        fg.PriorityClass = ProcessPriorityClass.High;
+
+                    int lowered = 0;
 
                     foreach (Process p in Process.GetProcesses())
                     {
                         try
                         {
-                            if (p.Id != fg.Id &&
-                                !p.ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
-                                !p.ProcessName.StartsWith("System"))
+                            if (p.HasExited)
+                                continue;
+
+                            if (p.Id == fg.Id)
+                                continue;
+
+                            // ❌ Skip system critical processes
+                            if (IsProtectedProcess(p))
+                                continue;
+
+                            // ❌ Skip explorer
+                            if (p.ProcessName.Equals("explorer",
+                                StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            // Only lower NORMAL processes
+                            if (p.PriorityClass == ProcessPriorityClass.Normal)
                             {
                                 p.PriorityClass = ProcessPriorityClass.BelowNormal;
+                                lowered++;
                             }
                         }
                         catch { }
                     }
+
+                    SafeUI(() =>
+                    {
+                        ShowBoostPopup(
+                            $"CPU Boost Applied ({lowered} lowered)",
+                            Color.DeepSkyBlue);
+                    });
                 }
                 catch { }
-
-                this.Invoke((Action)(() =>
-                {
-                    ShowBoostPopup("CPU Priority Boost Applied", Color.DeepSkyBlue);
-                }));
             });
         }
 
-
-
-
-
         private void btnNetBoost_Click(object sender, EventArgs e)
         {
-            // 🔒 HARD ADMIN CHECK FIRST
             if (!IsRunningAsAdmin())
             {
                 ShowBoostPopup("Admin Rights Required ⚠", Color.Red);
@@ -2250,36 +2464,40 @@ public Optimizer()
                 return;
             }
 
-            try
+            Task.Run(() =>
             {
-                // Network Throttling OFF
-                Registry.SetValue(
-                    @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
-                    "NetworkThrottlingIndex",
-                    unchecked((int)0xFFFFFFFF),   // ✅ IMPORTANT
-                    RegistryValueKind.DWord
-                );
+                try
+                {
+                    const string key =
+                        @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
 
-                // System responsiveness max
-                Registry.SetValue(
-                    @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
-                    "SystemResponsiveness",
-                    0,
-                    RegistryValueKind.DWord
-                );
+                    Registry.SetValue(
+                        key,
+                        "NetworkThrottlingIndex",
+                        unchecked((int)0xFFFFFFFF),
+                        RegistryValueKind.DWord);
 
-                ShowBoostPopup("Network Boost Enabled 🚀", Color.Lime);
-                SetAdminStatus("Network Boost: ENABLED", Color.Lime);
-            }
-            catch (Exception ex)
-            {
-                // ❌ REAL ERROR (not admin related)
-                ShowBoostPopup("Network Boost Failed ❌", Color.OrangeRed);
-                SetAdminStatus("Network Boost Error", Color.OrangeRed);
+                    Registry.SetValue(
+                        key,
+                        "SystemResponsiveness",
+                        0,
+                        RegistryValueKind.DWord);
 
-                // OPTIONAL: debug only
-                Debug.WriteLine(ex.Message);
-            }
+                    SafeUI(() =>
+                    {
+                        ShowBoostPopup("Network Boost Enabled 🚀", Color.Lime);
+                        SetAdminStatus("Network Boost: ENABLED", Color.Lime);
+                    });
+                }
+                catch
+                {
+                    SafeUI(() =>
+                    {
+                        ShowBoostPopup("Network Boost Failed ❌", Color.OrangeRed);
+                        SetAdminStatus("Network Boost Error", Color.OrangeRed);
+                    });
+                }
+            });
         }
 
 
@@ -2287,14 +2505,20 @@ public Optimizer()
         {
             Task.Run(() =>
             {
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-                GC.Collect();
-
-                this.Invoke((Action)(() =>
+                try
                 {
-                    ShowBoostPopup("Quick Memory Flush Done", Color.Lime);
-                }));
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+
+                    SafeUI(() =>
+                    {
+                        ShowBoostPopup(
+                            "Quick Memory Flush Done 🧹",
+                            Color.Lime);
+                    });
+                }
+                catch { }
             });
         }
 
@@ -2519,11 +2743,6 @@ public Optimizer()
                     default: ShowPanel(Homepnl, "Homepnl"); break;
                 }
             }
-            if (Properties.Settings.Default.AimOptimize)
-                {
-                    tgAimOptimize.Checked = true;
-                    EnableProAimOptimization();
-                }
         }
 
         private void label9_Click(object sender, EventArgs e)
@@ -2551,290 +2770,261 @@ public Optimizer()
 
         }
 
-        
+        // ================= AIM OPTIMIZER STATE =================
+
+        private CancellationTokenSource aimBoostCTS = null;
+        private bool aimOptimizerActive = false;
+        private bool timerResolutionActive = false;
+        private int lastBoostedPID = -1;
 
 
-// ================= AIM OPTIMIZE TOGGLE =================
-private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
-{
-    try
-    {
-        Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
-        Properties.Settings.Default.Save();
+        // ================= AIM TOGGLE =================
 
-        if (tgAimOptimize.Checked)
+        private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
         {
-            EnableProAimOptimization();
-            SetAdminStatus("Aim Optimization ENABLED 🎯", Color.Lime);
-        }
-        else
-        {
-            DisableProAimOptimization();
-            SetAdminStatus("Aim Optimization DISABLED ❌", Color.Orange);
-        }
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show("Aim Optimization Error:\n" + ex.Message);
-    }
-}
-
-
-// ================= ENABLE PRO AIM =================
-private void EnableProAimOptimization()
-{
-    lock (restoreLock)
-    {
-        SaveOriginalMouseSettings();
-        DisableMouseAccelerationInstant();
-        StartRealtimeBoostLoop();
-
-        if (!timerResolutionActive)
-        {
-            timeBeginPeriod(1);
-            timerResolutionActive = true;
-        }
-    }
-}
-
-
-// ================= DISABLE PRO AIM =================
-private void DisableProAimOptimization()
-{
-    lock (restoreLock)
-    {
-        try
-        {
-            aimBoostCTS?.Cancel();
-            aimBoostCTS?.Dispose();
-            aimBoostCTS = null;
-        }
-        catch { }
-
-        RestorePriorities();
-        RestoreAffinity();
-        RestoreMouseDefaultsInstant();
-
-        if (timerResolutionActive)
-        {
-            timeEndPeriod(1);
-            timerResolutionActive = false;
-        }
-    }
-}
-
-
-// ================= DISABLE ACCELERATION INSTANT =================
-
-private void DisableMouseAccelerationInstant()
-{
-    try
-    {
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "0");
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "0");
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "0");
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
-
-        int[] mouseParams = new int[] { 0, 0, 0 };
-
-        SystemParametersInfo(
-            SPI_SETMOUSE,
-            0,
-            mouseParams,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-
-        SystemParametersInfo(
-            SPI_SETMOUSESPEED,
-            0,
-            10,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-
-        ForceMouseRefresh();
-    }
-    catch { }
-}
-
-
-// ================= SAVE ORIGINAL SETTINGS =================
-
-private void SaveOriginalMouseSettings()
-{
-    if (mouseSettingsSaved) return;
-
-    try
-    {
-        using (RegistryKey key =
-            Registry.CurrentUser.OpenSubKey(@"Control Panel\Mouse"))
-        {
-            originalMouseSpeed =
-                int.TryParse(key.GetValue("MouseSpeed")?.ToString(), out int ms) ? ms : 1;
-
-            originalThreshold1 =
-                int.TryParse(key.GetValue("MouseThreshold1")?.ToString(), out int t1) ? t1 : 6;
-
-            originalThreshold2 =
-                int.TryParse(key.GetValue("MouseThreshold2")?.ToString(), out int t2) ? t2 : 10;
-
-            originalSensitivity =
-                int.TryParse(key.GetValue("MouseSensitivity")?.ToString(), out int sens) ? sens : 10;
-        }
-
-        mouseSettingsSaved = true;
-    }
-    catch { }
-}
-
-
-// ================= RESTORE EXACT ORIGINAL WINDOWS SETTINGS =================
-
-private void RestoreMouseDefaultsInstant()
-{
-    if (!mouseSettingsSaved) return;
-
-    try
-    {
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", originalMouseSpeed.ToString());
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", originalThreshold1.ToString());
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", originalThreshold2.ToString());
-        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", originalSensitivity.ToString());
-
-        int[] mouseParams =
-        {
-            originalThreshold1,
-            originalThreshold2,
-            originalMouseSpeed
-        };
-
-        SystemParametersInfo(
-            SPI_SETMOUSE,
-            0,
-            mouseParams,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-
-        SystemParametersInfo(
-            SPI_SETMOUSESPEED,
-            0,
-            originalSensitivity,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-
-        ForceMouseRefresh();
-
-        mouseSettingsSaved = false;
-    }
-    catch { }
-}
-
-
-// ================= FORCE REFRESH =================
-
-private void ForceMouseRefresh()
-{
-    try
-    {
-        Point pos = Cursor.Position;
-
-        Cursor.Position = new Point(pos.X + 1, pos.Y);
-        Cursor.Position = pos;
-    }
-    catch { }
-}
-
-
-// ================= REALTIME BOOST LOOP =================
-private void StartRealtimeBoostLoop()
-{
-    if (aimBoostCTS != null)
-        return;
-
-    aimBoostCTS = new CancellationTokenSource();
-    var token = aimBoostCTS.Token;
-
-    Task.Run(async () =>
-    {
-        while (!token.IsCancellationRequested)
-        {
-            BoostActiveGameUltra();
-
             try
             {
-                await Task.Delay(15, token); // 66 updates/sec for ultra smooth Free Fire aim
+                Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
+                Properties.Settings.Default.Save();
+
+                if (tgAimOptimize.Checked)
+                {
+                    EnableProAimOptimization();
+                    SetAdminStatus("Aim Optimization ENABLED 🎯", Color.Lime);
+                }
+                else
+                {
+                    DisableProAimOptimization();
+                    SetAdminStatus("Aim Optimization DISABLED ❌", Color.Orange);
+                }
             }
-            catch { break; }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Aim Optimization Error:\n" + ex.Message);
+            }
         }
-    }, token);
-}
-
-// ================= BOOST ACTIVE GAME (ULTRA MODE) =================
-private void BoostActiveGameUltra()
-{
-    try
-    {
-        IntPtr hwnd = GetForegroundWindow();
-        if (hwnd == IntPtr.Zero) return;
-
-        int pid;
-        GetWindowThreadProcessId(hwnd, out pid);
-        Process p = Process.GetProcessById(pid);
-
-        if (!gameProcesses.Contains(p.ProcessName, StringComparer.OrdinalIgnoreCase))
-            return;
-
-        // Save original priority & affinity
-        if (!originalPriorities.ContainsKey(pid))
-            originalPriorities.TryAdd(pid, p.PriorityClass);
-
-        if (!originalAffinity.ContainsKey(pid))
-            originalAffinity.TryAdd(pid, p.ProcessorAffinity);
-
-        // Ultra Free Fire / Emulator Priority
-        if (p.PriorityClass != ProcessPriorityClass.RealTime)
-            p.PriorityClass = ProcessPriorityClass.High;
-
-        // Full CPU affinity unlock
-        IntPtr fullAffinity = (IntPtr)((1 << Environment.ProcessorCount) - 1);
-        if (p.ProcessorAffinity != fullAffinity)
-            p.ProcessorAffinity = fullAffinity;
-
-        // Optional: Micro mouse refresh for smoother headshots
-        ForceMouseRefresh();
-
-    }
-    catch { }
-}
 
 
-// ================= RESTORE PRIORITIES =================
+        // ================= ENABLE =================
 
-private void RestorePriorities()
-{
-    foreach (var entry in originalPriorities)
-    {
-        try
+        private void EnableProAimOptimization()
         {
-            Process.GetProcessById(entry.Key).PriorityClass = entry.Value;
+            lock (restoreLock)
+            {
+                if (aimOptimizerActive)
+                    return;
+
+                aimOptimizerActive = true;
+
+                DisableMouseAccelerationInstant();
+
+                if (!timerResolutionActive)
+                {
+                    timeBeginPeriod(1);
+                    timerResolutionActive = true;
+                }
+
+                StartAimBoostLoop();
+            }
         }
-        catch { }
-    }
-
-    originalPriorities.Clear();
-}
 
 
-// ================= RESTORE AFFINITY =================
+        // ================= DISABLE =================
 
-private void RestoreAffinity()
-{
-    foreach (var entry in originalAffinity)
-    {
-        try
+        private void DisableProAimOptimization()
         {
-            Process.GetProcessById(entry.Key).ProcessorAffinity = entry.Value;
-        }
-        catch { }
-    }
+            lock (restoreLock)
+            {
+                aimOptimizerActive = false;
 
-    originalAffinity.Clear();
-}
+                try
+                {
+                    aimBoostCTS?.Cancel();
+                    aimBoostCTS?.Dispose();
+                    aimBoostCTS = null;
+                }
+                catch { }
+
+                RestorePriorities();
+                RestoreMouseDefaultsInstant();
+
+                if (timerResolutionActive)
+                {
+                    timeEndPeriod(1);
+                    timerResolutionActive = false;
+                }
+
+                lastBoostedPID = -1;
+            }
+        }
+
+
+        // ================= SAFE CLOSE SUPPORT =================
+
+        // Call this in your FormClosing event OR Guna2 close button event
+        private void SafeStopAimOptimizer()
+        {
+            try
+            {
+                DisableProAimOptimization();
+            }
+            catch { }
+        }
+
+
+        // ================= REALTIME LOOP =================
+
+        private void StartAimBoostLoop()
+        {
+            if (aimBoostCTS != null)
+                return;
+
+            aimBoostCTS = new CancellationTokenSource();
+            var token = aimBoostCTS.Token;
+
+            Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested && aimOptimizerActive)
+                {
+                    BoostActiveGameRealtime();
+
+                    try
+                    {
+                        await Task.Delay(8, token); // 125 updates/sec (NEXT LEVEL)
+                    }
+                    catch
+                    {
+                        break;
+                    }
+                }
+            }, token);
+        }
+
+
+        // ================= REALTIME BOOST =================
+
+        private void BoostActiveGameRealtime()
+        {
+            try
+            {
+                IntPtr hwnd = GetForegroundWindow();
+
+                if (hwnd == IntPtr.Zero)
+                    return;
+
+                int pid;
+                GetWindowThreadProcessId(hwnd, out pid);
+
+                if (pid <= 0)
+                    return;
+
+                if (pid == lastBoostedPID)
+                    return;
+
+                Process p = Process.GetProcessById(pid);
+
+                if (!gameProcesses.Contains(p.ProcessName))
+                    return;
+
+                lastBoostedPID = pid;
+
+                // Save original priority
+                if (!originalPriorities.ContainsKey(pid))
+                    originalPriorities.TryAdd(pid, p.PriorityClass);
+
+                // Apply HIGH priority safely
+                if (p.PriorityClass != ProcessPriorityClass.High)
+                    p.PriorityClass = ProcessPriorityClass.High;
+
+                ForceMouseRefresh();
+            }
+            catch
+            {
+                lastBoostedPID = -1;
+            }
+        }
+
+
+        // ================= MOUSE DISABLE ACCEL =================
+
+        private void DisableMouseAccelerationInstant()
+        {
+            try
+            {
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSpeed", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold1", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold2", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSensitivity", "10");
+
+                int[] mouseParams = new int[] { 0, 0, 0 };
+
+                SystemParametersInfo(
+                    SPI_SETMOUSE,
+                    0,
+                    mouseParams,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+                ForceMouseRefresh();
+            }
+            catch { }
+        }
+
+
+        // ================= RESTORE =================
+
+        private void RestoreMouseDefaultsInstant()
+        {
+            try
+            {
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSpeed", "1");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold1", "6");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold2", "10");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSensitivity", "10");
+
+                int[] mouseParams = new int[] { 6, 10, 1 };
+
+                SystemParametersInfo(
+                    SPI_SETMOUSE,
+                    0,
+                    mouseParams,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+                ForceMouseRefresh();
+            }
+            catch { }
+        }
+
+
+        // ================= RESTORE PRIORITY =================
+
+        private void RestorePriorities()
+        {
+            foreach (var entry in originalPriorities)
+            {
+                try
+                {
+                    Process.GetProcessById(entry.Key).PriorityClass = entry.Value;
+                }
+                catch { }
+            }
+
+            originalPriorities.Clear();
+        }
+
+
+        // ================= FORCE REFRESH =================
+
+        private void ForceMouseRefresh()
+        {
+            try
+            {
+                Point pos = Cursor.Position;
+
+                Cursor.Position = new Point(pos.X + 1, pos.Y);
+                Cursor.Position = pos;
+            }
+            catch { }
+        }
 
     }
 }
