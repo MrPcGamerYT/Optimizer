@@ -1,6 +1,6 @@
 ﻿[Setup]
 AppName=Optimizer
-AppVersion=1.0.1.18
+AppVersion=1.0.1.19
 DefaultDirName={autopf}\Optimizer
 DefaultGroupName=Optimizer
 UninstallDisplayIcon={app}\Optimizer.exe
@@ -14,7 +14,7 @@ AppPublisher=Mr.Pc Gamer
 AppPublisherURL=https://github.com/MrPcGamerYT/Optimizer
 VersionInfoCompany=Mr.Pc Gamer
 VersionInfoDescription=Optimizer System Setup
-VersionInfoVersion=1.0.1.18
+VersionInfoVersion=1.0.1.19
 VersionInfoCopyright=Â© 2026 Mr.Pc Gamer. All Rights Reserved.
 
 ; --- ADMIN RIGHTS ---
