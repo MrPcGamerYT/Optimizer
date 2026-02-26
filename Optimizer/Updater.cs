@@ -4,120 +4,99 @@ using System.IO;
 using System.Diagnostics;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
+using System.Net.Cache;
 
-class Updater
+namespace Optimizer   // ⚠ IMPORTANT: must match your project namespace
 {
-    private const string UpdateInfoUrl =
-        "https://raw.githubusercontent.com/MrPcGamerYT/Optimizer/main/update.json";
-
-    public static void CheckAndUpdate()
+    public static class Updater
     {
-        try
+        private const string UpdateInfoUrl =
+            "https://raw.githubusercontent.com/MrPcGamerYT/Optimizer/main/update.json";
+
+        public static void CheckAndUpdate()
         {
-            using (WebClient wc = new WebClient())
+            try
             {
-                // Disable caching to always get the latest JSON
-                wc.CachePolicy = new System.Net.Cache.RequestCachePolicy(
-                    System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
+                ServicePointManager.SecurityProtocol =
+                    SecurityProtocolType.Tls12 |
+                    SecurityProtocolType.Tls11;
 
-                string json = wc.DownloadString(UpdateInfoUrl);
-
-                string latestVersionText = ExtractJsonValue(json, "version");
-                string installerUrl = ExtractJsonValue(json, "url");
-
-                // Compare versions: if latest <= current, do nothing
-                if (CompareVersions(latestVersionText, Application.ProductVersion) <= 0)
-                    return; // already up-to-date
-
-                // Ask user to update
-                if (MessageBox.Show(
-                    $"New version {latestVersionText} is available.\n\nUpdate now?",
-                    "Optimizer Update",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Information) != DialogResult.Yes)
-                    return;
-
-                string installerPath = Path.Combine(
-                    Path.GetTempPath(),
-                    "OptimizerSetup.exe"
-                );
-
-                // Remove previous installer if exists
-                if (File.Exists(installerPath))
-                    File.Delete(installerPath);
-
-                // Download latest installer
-                wc.DownloadFile(installerUrl, installerPath);
-
-                // Run installer only (never the main exe)
-                Process.Start(new ProcessStartInfo
+                using (WebClient wc = new WebClient())
                 {
-                    FileName = installerPath,
-                    UseShellExecute = true,
-                    Verb = "runas" // prompt for admin
-                });
+                    wc.CachePolicy = new RequestCachePolicy(RequestCacheLevel.NoCacheNoStore);
+                    wc.Headers.Add("Cache-Control", "no-cache");
 
-                // Force exit the current app immediately
-                Environment.Exit(0);
+                    string json = wc.DownloadString(UpdateInfoUrl);
+
+                    string latestVersion = ExtractValue(json, "version");
+                    string installerUrl = ExtractValue(json, "url");
+
+                    string currentVersion = Application.ProductVersion;
+
+                    if (CompareVersions(latestVersion, currentVersion) <= 0)
+                        return;
+
+                    DialogResult result = MessageBox.Show(
+                        $"New version {latestVersion} available.\n\nYour version: {currentVersion}\n\nUpdate now?",
+                        "Optimizer Update",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Information);
+
+                    if (result != DialogResult.Yes)
+                        return;
+
+                    string installerPath = Path.Combine(
+                        Path.GetTempPath(),
+                        "OptimizerSetup.exe");
+
+                    if (File.Exists(installerPath))
+                        File.Delete(installerPath);
+
+                    wc.DownloadFile(installerUrl, installerPath);
+
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = installerPath,
+                        UseShellExecute = true,
+                        Verb = "runas"
+                    });
+
+                    Environment.Exit(0);
+                }
+            }
+            catch (WebException)
+            {
+                // silent fail (no internet or server down)
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Updater Error:\n" + ex.Message,
+                    "Updater",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
         }
-        catch (Exception ex)
+
+        private static string ExtractValue(string json, string key)
         {
-            MessageBox.Show(
-                "Update failed:\n" + ex.Message,
-                "Update Error",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error
-            );
-        }
-    }
+            Match match = Regex.Match(
+                json,
+                $"\"{key}\"\\s*:\\s*\"([^\"]+)\"",
+                RegexOptions.IgnoreCase);
 
-    // Extract a JSON value by key (no external library required)
-    private static string ExtractJsonValue(string json, string key)
-    {
-        var match = Regex.Match(
-            json,
-            $"\"{key}\"\\s*:\\s*\"([^\"]+)\"",
-            RegexOptions.IgnoreCase
-        );
+            if (!match.Success)
+                throw new Exception("Invalid update.json format");
 
-        if (!match.Success)
-            throw new Exception($"Missing '{key}' in update.json");
-
-        return match.Groups[1].Value;
-    }
-
-    // Compare semantic versions: returns 1 if latest > current, -1 if latest < current, 0 if equal
-    private static int CompareVersions(string vLatest, string vCurrent)
-    {
-        int[] latestParts = ParseVersionParts(vLatest);
-        int[] currentParts = ParseVersionParts(vCurrent);
-
-        int maxLength = Math.Max(latestParts.Length, currentParts.Length);
-
-        for (int i = 0; i < maxLength; i++)
-        {
-            int latest = (i < latestParts.Length) ? latestParts[i] : 0;
-            int current = (i < currentParts.Length) ? currentParts[i] : 0;
-
-            if (latest > current) return 1;
-            if (latest < current) return -1;
+            return match.Groups[1].Value;
         }
 
-        return 0; // equal
-    }
+        private static int CompareVersions(string latest, string current)
+        {
+            Version vLatest = new Version(latest);
+            Version vCurrent = new Version(current);
 
-    private static int[] ParseVersionParts(string v)
-    {
-        var match = Regex.Match(v, @"\d+(\.\d+)*");
-        if (!match.Success)
-            throw new Exception("Invalid version format: " + v);
-
-        string[] parts = match.Value.Split('.');
-        int[] numbers = new int[parts.Length];
-        for (int i = 0; i < parts.Length; i++)
-            numbers[i] = int.Parse(parts[i]);
-
-        return numbers;
+            return vLatest.CompareTo(vCurrent);
+        }
     }
 }
