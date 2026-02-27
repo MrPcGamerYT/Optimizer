@@ -1651,113 +1651,113 @@ namespace Optimizer
         }
 
 
-public Optimizer()
-{
-    InitializeComponent();
-
-    try
-    {
-        this.FormClosing += Optimizer_FormClosing;
-
-        InitCounters();
-        LoadSystemInfo();
-
-        // ===============================
-        // CREATE TRAY ICON FIRST (FIX)
-        // ===============================
-        trayIcon = new NotifyIcon();
-        trayIcon.Icon = this.Icon;
-        trayIcon.Text = "Optimizer";
-        trayIcon.Visible = true;
-
-        // Now initialize tray menu safely
-        InitTray();
-
-        tip = new ToolTip();
-
-        systemDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
-
-        // ===============================
-        // SAFE UPDATER
-        // ===============================
-        try
+        public Optimizer()
         {
-            Updater.CheckAndUpdate();
-        }
-        catch { }
+            InitializeComponent();
 
-        lblDriveCTitle.Text =
-            $"{systemDrive.VolumeLabel} ({systemDrive.Name.TrimEnd('\\')})";
-
-        // ===============================
-        // TIMERS
-        // ===============================
-
-        pingTimer = new System.Windows.Forms.Timer();
-        pingTimer.Interval = 1000;
-        pingTimer.Tick += PingTimer_Tick;
-        pingTimer.Start();
-
-        usageTimer = new System.Windows.Forms.Timer();
-        usageTimer.Interval = 1000;
-        usageTimer.Tick += UsageTimer_Tick;
-        usageTimer.Start();
-
-        animationTimer = new System.Windows.Forms.Timer();
-        animationTimer.Interval = 16;
-        animationTimer.Tick += AnimationTimer_Tick;
-        animationTimer.Start();
-
-        trayBlinkTimer = new System.Windows.Forms.Timer();
-        trayBlinkTimer.Interval = 500;
-        trayBlinkTimer.Tick += (s, e) =>
-        {
-            if (trayIcon == null) return;
-
-            trayBlinkState = !trayBlinkState;
-            trayIcon.Icon = trayBlinkState
-                ? trayIconAlert
-                : trayIconNormal;
-        };
-
-        trayIconNormal = this.Icon;
-        trayIconAlert = Properties.Resources.Icon;
-
-        LoadSavedSettings();
-
-        this.MaximumSize = this.Size;
-        this.MinimumSize = this.Size;
-
-        lblVersion.Text = Application.ProductVersion;
-
-        tgAimOptimize.Checked = Properties.Settings.Default.AimOptimize;
-
-        gameExecutablesSet = new HashSet<string>(
-            gameExecutables.Select(g => g.ToLower())
-        );
-
-        // ===============================
-        // SAFE EXIT RESTORE
-        // ===============================
-        AppDomain.CurrentDomain.ProcessExit += (s, e) =>
-        {
             try
             {
-                DisableProAimOptimization();
+                this.FormClosing += Optimizer_FormClosing;
+
+                InitCounters();
+                LoadSystemInfo();
+
+                // ===============================
+                // SET ICONS FIRST
+                // ===============================
+                trayIconNormal = this.Icon;
+                trayIconAlert = Properties.Resources.Icon; // your alert icon
+
+                // ===============================
+                // INITIALIZE TRAY ICON AND MENU
+                // ===============================
+                InitTray();
+
+                tip = new ToolTip();
+
+                systemDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
+
+                // ===============================
+                // SAFE UPDATER
+                // ===============================
+                try
+                {
+                    Updater.CheckAndUpdate();
+                }
+                catch { }
+
+                lblDriveCTitle.Text =
+                    $"{systemDrive.VolumeLabel} ({systemDrive.Name.TrimEnd('\\')})";
+
+                // ===============================
+                // TIMERS
+                // ===============================
+
+                pingTimer = new System.Windows.Forms.Timer();
+                pingTimer.Interval = 1000;
+                pingTimer.Tick += PingTimer_Tick;
+                pingTimer.Start();
+
+                usageTimer = new System.Windows.Forms.Timer();
+                usageTimer.Interval = 1000;
+                usageTimer.Tick += UsageTimer_Tick;
+                usageTimer.Start();
+
+                animationTimer = new System.Windows.Forms.Timer();
+                animationTimer.Interval = 16;
+                animationTimer.Tick += AnimationTimer_Tick;
+                animationTimer.Start();
+
+                trayBlinkTimer = new System.Windows.Forms.Timer();
+                trayBlinkTimer.Interval = 500;
+                trayBlinkTimer.Tick += (s, e) =>
+                {
+                    if (trayIcon == null) return;
+
+                    trayBlinkState = !trayBlinkState;
+                    trayIcon.Icon = trayBlinkState
+                        ? trayIconAlert
+                        : trayIconNormal;
+                };
+
+                trayIconNormal = this.Icon;
+                trayIconAlert = Properties.Resources.Icon;
+
+                LoadSavedSettings();
+
+                this.MaximumSize = this.Size;
+                this.MinimumSize = this.Size;
+
+                lblVersion.Text = Application.ProductVersion;
+
+                tgAimOptimize.Checked = Properties.Settings.Default.AimOptimize;
+
+                gameExecutablesSet = new HashSet<string>(
+                    gameExecutables.Select(g => g.ToLower())
+                );
+
+                // ===============================
+                // SAFE EXIT RESTORE
+                // ===============================
+                AppDomain.CurrentDomain.ProcessExit += (s, e) =>
+                {
+                    try
+                    {
+                        DisableProAimOptimization();
+                    }
+                    catch { }
+                };
             }
-            catch { }
-        };
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show(
-            "Startup error:\n" + ex.Message,
-            "Optimizer",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error
-        );
-    }
-}
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Startup error:\n" + ex.Message,
+                    "Optimizer",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
 
         private void Optimizer_FormClosing(object sender, FormClosingEventArgs e)
         {
@@ -1835,64 +1835,55 @@ public Optimizer()
 
 
         private void InitTray()
-{
-    // Prevent duplicate initialization
-    if (trayIcon != null)
-        return;
-
-    trayMenu = new ContextMenuStrip();
-
-    // ===============================
-    // SHOW / RESTORE
-    // ===============================
-    trayMenu.Items.Add("Show Optimizer", null, (s, e) =>
-    {
-        RestoreFromTray();
-    });
-
-    trayMenu.Items.Add(new ToolStripSeparator());
-
-    // ===============================
-    // EXIT
-    // ===============================
-    trayMenu.Items.Add("Exit", null, (s, e) =>
-    {
-        allowExit = true;
-
-        try
         {
-            if (trayIcon != null)
+            if (trayIcon != null) return;
+
+            // ===============================
+            // TRAY ICON
+            // ===============================
+            trayIcon = new NotifyIcon
             {
+                Icon = trayIconNormal,
+                Text = "Optimizer",
+                Visible = false
+            };
+
+            // ===============================
+            // CONTEXT MENU
+            // ===============================
+            trayMenu = new ContextMenuStrip();
+            trayMenu.Items.Add("Open", null, (s, e) => RestoreFromTray());
+            trayMenu.Items.Add(new ToolStripSeparator());
+            trayMenu.Items.Add("Exit", null, (s, e) =>
+            {
+                allowExit = true;
                 trayIcon.Visible = false;
                 trayIcon.Dispose();
                 trayIcon = null;
-            }
+                Application.Exit();
+            });
+            trayIcon.ContextMenuStrip = trayMenu;
+
+            // ===============================
+            // LEFT CLICK RESTORE
+            // ===============================
+            trayIcon.MouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                    RestoreFromTray();
+            };
+
+            // ===============================
+            // BLINK TIMER
+            // ===============================
+            trayBlinkTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            trayBlinkTimer.Tick += (s, e) =>
+            {
+                if (trayIcon == null) return;
+                trayBlinkState = !trayBlinkState;
+                trayIcon.Icon = trayBlinkState ? trayIconAlert : trayIconNormal;
+            };
         }
-        catch { }
-
-        Application.Exit();
-    });
-
-    // ===============================
-    // CREATE TRAY ICON  (FIX)
-    // ===============================
-    trayIcon = new NotifyIcon
-    {
-        Icon = this.Icon,
-        Text = "Optimizer",
-        ContextMenuStrip = trayMenu,
-        Visible = false
-    };
-
-    // ===============================
-    // CLICK HANDLER
-    // ===============================
-    trayIcon.MouseClick += (s, e) =>
-    {
-        if (e.Button == MouseButtons.Left)
-            RestoreFromTray();
-    };
-}
 
         private void RestoreFromTray()
         {
@@ -2818,318 +2809,318 @@ public Optimizer()
 
         // ================= AIM OPTIMIZER STATE =================
 
-private CancellationTokenSource aimBoostCTS = null;
-private bool aimOptimizerActive = false;
-private bool timerResolutionActive = false;
-private int lastBoostedPID = -1;
+        private CancellationTokenSource aimBoostCTS = null;
+        private bool aimOptimizerActive = false;
+        private bool timerResolutionActive = false;
+        private int lastBoostedPID = -1;
 
 
-// ================= AIM TOGGLE =================
+        // ================= AIM TOGGLE =================
 
-private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
-{
-    try
-    {
-        Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
-        Properties.Settings.Default.Save();
-
-        if (tgAimOptimize.Checked)
+        private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
         {
-            EnableProAimOptimization();
-            SetAdminStatus("Aim Optimization ENABLED 🎯", Color.Lime);
-        }
-        else
-        {
-            DisableProAimOptimization();
-            SetAdminStatus("Aim Optimization DISABLED ❌", Color.Orange);
-        }
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show("Aim Optimization Error:\n" + ex.Message);
-    }
-}
-
-
-// ================= ENABLE =================
-
-private void EnableProAimOptimization()
-{
-    lock (restoreLock)
-    {
-        if (aimOptimizerActive)
-            return;
-
-        aimOptimizerActive = true;
-
-        SaveOriginalMouseSettings();   // 🔥 IMPORTANT
-
-        DisableMouseAccelerationInstant();
-
-        if (!timerResolutionActive)
-        {
-            timeBeginPeriod(1);
-            timerResolutionActive = true;
-        }
-
-        StartAimBoostLoop();
-    }
-}
-
-//==============Save original mouse settings to restore later (important for user experience)================
-
-private void SaveOriginalMouseSettings()
-{
-    try
-    {
-        originalMouseSpeed =
-            Registry.GetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseSpeed",
-                "1")?.ToString();
-
-        originalThreshold1 =
-            Registry.GetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseThreshold1",
-                "6")?.ToString();
-
-        originalThreshold2 =
-            Registry.GetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseThreshold2",
-                "10")?.ToString();
-
-        originalSensitivity =
-            Registry.GetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseSensitivity",
-                "10")?.ToString();
-    }
-    catch { }
-}
-
-
-// ================= DISABLE =================
-
-private void DisableProAimOptimization()
-{
-    lock (restoreLock)
-    {
-        aimOptimizerActive = false;
-
-        try
-        {
-            aimBoostCTS?.Cancel();
-            aimBoostCTS?.Dispose();
-            aimBoostCTS = null;
-        }
-        catch { }
-
-        RestorePriorities();
-        RestoreMouseDefaultsInstant();
-
-        if (timerResolutionActive)
-        {
-            timeEndPeriod(1);
-            timerResolutionActive = false;
-        }
-
-        lastBoostedPID = -1;
-    }
-}
-
-
-// ================= SAFE CLOSE SUPPORT =================
-
-// Call this in your FormClosing event OR Guna2 close button event
-private void SafeStopAimOptimizer()
-{
-    try
-    {
-        DisableProAimOptimization();
-    }
-    catch { }
-}
-
-
-// ================= REALTIME LOOP =================
-
-private void StartAimBoostLoop()
-{
-    if (aimBoostCTS != null)
-        return;
-
-    aimBoostCTS = new CancellationTokenSource();
-    var token = aimBoostCTS.Token;
-
-    Task.Run(async () =>
-    {
-        while (!token.IsCancellationRequested && aimOptimizerActive)
-        {
-            BoostActiveGameRealtime();
-
             try
             {
-                await Task.Delay(8, token); // 125 updates/sec (NEXT LEVEL)
+                Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
+                Properties.Settings.Default.Save();
+
+                if (tgAimOptimize.Checked)
+                {
+                    EnableProAimOptimization();
+                    SetAdminStatus("Aim Optimization ENABLED 🎯", Color.Lime);
+                }
+                else
+                {
+                    DisableProAimOptimization();
+                    SetAdminStatus("Aim Optimization DISABLED ❌", Color.Orange);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Aim Optimization Error:\n" + ex.Message);
+            }
+        }
+
+
+        // ================= ENABLE =================
+
+        private void EnableProAimOptimization()
+        {
+            lock (restoreLock)
+            {
+                if (aimOptimizerActive)
+                    return;
+
+                aimOptimizerActive = true;
+
+                SaveOriginalMouseSettings();   // 🔥 IMPORTANT
+
+                DisableMouseAccelerationInstant();
+
+                if (!timerResolutionActive)
+                {
+                    timeBeginPeriod(1);
+                    timerResolutionActive = true;
+                }
+
+                StartAimBoostLoop();
+            }
+        }
+
+        //==============Save original mouse settings to restore later (important for user experience)================
+
+        private void SaveOriginalMouseSettings()
+        {
+            try
+            {
+                originalMouseSpeed =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseSpeed",
+                        "1")?.ToString();
+
+                originalThreshold1 =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseThreshold1",
+                        "6")?.ToString();
+
+                originalThreshold2 =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseThreshold2",
+                        "10")?.ToString();
+
+                originalSensitivity =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseSensitivity",
+                        "10")?.ToString();
+            }
+            catch { }
+        }
+
+
+        // ================= DISABLE =================
+
+        private void DisableProAimOptimization()
+        {
+            lock (restoreLock)
+            {
+                aimOptimizerActive = false;
+
+                try
+                {
+                    aimBoostCTS?.Cancel();
+                    aimBoostCTS?.Dispose();
+                    aimBoostCTS = null;
+                }
+                catch { }
+
+                RestorePriorities();
+                RestoreMouseDefaultsInstant();
+
+                if (timerResolutionActive)
+                {
+                    timeEndPeriod(1);
+                    timerResolutionActive = false;
+                }
+
+                lastBoostedPID = -1;
+            }
+        }
+
+
+        // ================= SAFE CLOSE SUPPORT =================
+
+        // Call this in your FormClosing event OR Guna2 close button event
+        private void SafeStopAimOptimizer()
+        {
+            try
+            {
+                DisableProAimOptimization();
+            }
+            catch { }
+        }
+
+
+        // ================= REALTIME LOOP =================
+
+        private void StartAimBoostLoop()
+        {
+            if (aimBoostCTS != null)
+                return;
+
+            aimBoostCTS = new CancellationTokenSource();
+            var token = aimBoostCTS.Token;
+
+            Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested && aimOptimizerActive)
+                {
+                    BoostActiveGameRealtime();
+
+                    try
+                    {
+                        await Task.Delay(8, token); // 125 updates/sec (NEXT LEVEL)
+                    }
+                    catch
+                    {
+                        break;
+                    }
+                }
+            }, token);
+        }
+
+
+        // ================= REALTIME BOOST =================
+
+        private void BoostActiveGameRealtime()
+        {
+            try
+            {
+                IntPtr hwnd = GetForegroundWindow();
+
+                if (hwnd == IntPtr.Zero)
+                    return;
+
+                int pid;
+                GetWindowThreadProcessId(hwnd, out pid);
+
+                if (pid <= 0)
+                    return;
+
+                if (pid == lastBoostedPID)
+                    return;
+
+                Process p = Process.GetProcessById(pid);
+
+                if (!gameProcesses.Contains(p.ProcessName))
+                    return;
+
+                lastBoostedPID = pid;
+
+                // Save original priority
+                if (!originalPriorities.ContainsKey(pid))
+                    originalPriorities.TryAdd(pid, p.PriorityClass);
+
+                // Apply HIGH priority safely
+                if (p.PriorityClass != ProcessPriorityClass.High)
+                    p.PriorityClass = ProcessPriorityClass.High;
+
+                ForceMouseRefresh();
             }
             catch
             {
-                break;
+                lastBoostedPID = -1;
             }
         }
-    }, token);
-}
 
 
-// ================= REALTIME BOOST =================
+        // ================= MOUSE DISABLE ACCEL =================
 
-private void BoostActiveGameRealtime()
-{
-    try
-    {
-        IntPtr hwnd = GetForegroundWindow();
-
-        if (hwnd == IntPtr.Zero)
-            return;
-
-        int pid;
-        GetWindowThreadProcessId(hwnd, out pid);
-
-        if (pid <= 0)
-            return;
-
-        if (pid == lastBoostedPID)
-            return;
-
-        Process p = Process.GetProcessById(pid);
-
-        if (!gameProcesses.Contains(p.ProcessName))
-            return;
-
-        lastBoostedPID = pid;
-
-        // Save original priority
-        if (!originalPriorities.ContainsKey(pid))
-            originalPriorities.TryAdd(pid, p.PriorityClass);
-
-        // Apply HIGH priority safely
-        if (p.PriorityClass != ProcessPriorityClass.High)
-            p.PriorityClass = ProcessPriorityClass.High;
-
-        ForceMouseRefresh();
-    }
-    catch
-    {
-        lastBoostedPID = -1;
-    }
-}
-
-
-// ================= MOUSE DISABLE ACCEL =================
-
-private void DisableMouseAccelerationInstant()
-{
-    try
-    {
-        Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSpeed", "0");
-        Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold1", "0");
-        Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold2", "0");
-        Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSensitivity", "10");
-
-        int[] mouseParams = new int[] { 0, 0, 0 };
-
-        SystemParametersInfo(
-            SPI_SETMOUSE,
-            0,
-            mouseParams,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-
-        ForceMouseRefresh();
-    }
-    catch { }
-}
-
-
-// ================= RESTORE =================
-
-private void RestoreMouseDefaultsInstant()
-{
-    try
-    {
-        if (originalMouseSpeed != null)
-            Registry.SetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseSpeed",
-                originalMouseSpeed);
-
-        if (originalThreshold1 != null)
-            Registry.SetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseThreshold1",
-                originalThreshold1);
-
-        if (originalThreshold2 != null)
-            Registry.SetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseThreshold2",
-                originalThreshold2);
-
-        if (originalSensitivity != null)
-            Registry.SetValue(
-                @"HKEY_CURRENT_USER\Control Panel\Mouse",
-                "MouseSensitivity",
-                originalSensitivity);
-
-        int[] mouseParams =
+        private void DisableMouseAccelerationInstant()
         {
+            try
+            {
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSpeed", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold1", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold2", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSensitivity", "10");
+
+                int[] mouseParams = new int[] { 0, 0, 0 };
+
+                SystemParametersInfo(
+                    SPI_SETMOUSE,
+                    0,
+                    mouseParams,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+                ForceMouseRefresh();
+            }
+            catch { }
+        }
+
+
+        // ================= RESTORE =================
+
+        private void RestoreMouseDefaultsInstant()
+        {
+            try
+            {
+                if (originalMouseSpeed != null)
+                    Registry.SetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseSpeed",
+                        originalMouseSpeed);
+
+                if (originalThreshold1 != null)
+                    Registry.SetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseThreshold1",
+                        originalThreshold1);
+
+                if (originalThreshold2 != null)
+                    Registry.SetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseThreshold2",
+                        originalThreshold2);
+
+                if (originalSensitivity != null)
+                    Registry.SetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseSensitivity",
+                        originalSensitivity);
+
+                int[] mouseParams =
+                {
     int.Parse(originalThreshold1 ?? "6"),
     int.Parse(originalThreshold2 ?? "10"),
     int.Parse(originalMouseSpeed ?? "1")
 };
 
-        SystemParametersInfo(
-            SPI_SETMOUSE,
-            0,
-            mouseParams,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                SystemParametersInfo(
+                    SPI_SETMOUSE,
+                    0,
+                    mouseParams,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
-        ForceMouseRefresh();
-    }
-    catch { }
-}
-
-
-// ================= RESTORE PRIORITY =================
-
-private void RestorePriorities()
-{
-    foreach (var entry in originalPriorities)
-    {
-        try
-        {
-            Process.GetProcessById(entry.Key).PriorityClass = entry.Value;
+                ForceMouseRefresh();
+            }
+            catch { }
         }
-        catch { }
-    }
-
-    originalPriorities.Clear();
-}
 
 
-// ================= FORCE REFRESH =================
+        // ================= RESTORE PRIORITY =================
 
-private void ForceMouseRefresh()
-{
-    try
-    {
-        Point pos = Cursor.Position;
+        private void RestorePriorities()
+        {
+            foreach (var entry in originalPriorities)
+            {
+                try
+                {
+                    Process.GetProcessById(entry.Key).PriorityClass = entry.Value;
+                }
+                catch { }
+            }
 
-        Cursor.Position = new Point(pos.X + 1, pos.Y);
-        Cursor.Position = pos;
-    }
-    catch { }
-}
+            originalPriorities.Clear();
+        }
+
+
+        // ================= FORCE REFRESH =================
+
+        private void ForceMouseRefresh()
+        {
+            try
+            {
+                Point pos = Cursor.Position;
+
+                Cursor.Position = new Point(pos.X + 1, pos.Y);
+                Cursor.Position = pos;
+            }
+            catch { }
+        }
 
     }
 }
