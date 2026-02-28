@@ -66,6 +66,7 @@ It is designed to improve system performance, clean junk files, boost games & em
 
 ### ⚙️ Settings
 
+* Aim Optimize *(make yor aim smoother)*
 * Minimize to system tray
   *(Required for background game/emulator boosting)*
 * Reduce UI animations (toggle switch)
