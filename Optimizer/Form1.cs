@@ -2757,7 +2757,7 @@ namespace Optimizer
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = "https://discord.gg/XbqcMzwfQQ",
+                FileName = "https://discord.gg/8Tuygffr8a",
                 UseShellExecute = true
             });
         }
