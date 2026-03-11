@@ -2812,10 +2812,14 @@ namespace Optimizer
 private CancellationTokenSource aimBoostCTS = null;
 private bool aimOptimizerActive = false;
 private bool timerResolutionActive = false;
-
 private int lastBoostedPID = -1;
-private DateTime lastBoostTime = DateTime.MinValue;
-private DateTime lastMemoryClean = DateTime.MinValue;
+
+private readonly object restoreLock = new object();
+
+private string originalMouseSpeed;
+private string originalThreshold1;
+private string originalThreshold2;
+private string originalSensitivity;
 
 
 // ================= AIM TOGGLE =================
@@ -2824,6 +2828,9 @@ private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
 {
     try
     {
+        Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
+        Properties.Settings.Default.Save();
+
         if (tgAimOptimize.Checked)
         {
             EnableProAimOptimization();
@@ -2846,21 +2853,58 @@ private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
 
 private void EnableProAimOptimization()
 {
-    if (aimOptimizerActive)
-        return;
-
-    aimOptimizerActive = true;
-
-    SaveOriginalMouseSettings();
-    DisableMouseAccelerationInstant();
-
-    if (!timerResolutionActive)
+    lock (restoreLock)
     {
-        timeBeginPeriod(1);
-        timerResolutionActive = true;
-    }
+        if (aimOptimizerActive)
+            return;
 
-    StartAimBoostLoop();
+        aimOptimizerActive = true;
+
+        SaveOriginalMouseSettings();
+        DisableMouseAccelerationInstant();
+
+        if (!timerResolutionActive)
+        {
+            timeBeginPeriod(1);
+            timerResolutionActive = true;
+        }
+
+        StartAimBoostLoop();
+    }
+}
+
+
+// ================= SAVE MOUSE SETTINGS =================
+
+private void SaveOriginalMouseSettings()
+{
+    try
+    {
+        originalMouseSpeed =
+            Registry.GetValue(
+                @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                "MouseSpeed",
+                "1")?.ToString();
+
+        originalThreshold1 =
+            Registry.GetValue(
+                @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                "MouseThreshold1",
+                "6")?.ToString();
+
+        originalThreshold2 =
+            Registry.GetValue(
+                @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                "MouseThreshold2",
+                "10")?.ToString();
+
+        originalSensitivity =
+            Registry.GetValue(
+                @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                "MouseSensitivity",
+                "10")?.ToString();
+    }
+    catch { }
 }
 
 
@@ -2868,26 +2912,41 @@ private void EnableProAimOptimization()
 
 private void DisableProAimOptimization()
 {
-    aimOptimizerActive = false;
+    lock (restoreLock)
+    {
+        aimOptimizerActive = false;
 
+        try
+        {
+            aimBoostCTS?.Cancel();
+            aimBoostCTS?.Dispose();
+            aimBoostCTS = null;
+        }
+        catch { }
+
+        RestorePriorities();
+        RestoreMouseDefaultsInstant();
+
+        if (timerResolutionActive)
+        {
+            timeEndPeriod(1);
+            timerResolutionActive = false;
+        }
+
+        lastBoostedPID = -1;
+    }
+}
+
+
+// ================= SAFE CLOSE =================
+
+private void SafeStopAimOptimizer()
+{
     try
     {
-        aimBoostCTS?.Cancel();
-        aimBoostCTS?.Dispose();
-        aimBoostCTS = null;
+        DisableProAimOptimization();
     }
     catch { }
-
-    RestorePriorities();
-    RestoreMouseDefaultsInstant();
-
-    if (timerResolutionActive)
-    {
-        timeEndPeriod(1);
-        timerResolutionActive = false;
-    }
-
-    lastBoostedPID = -1;
 }
 
 
@@ -2907,15 +2966,9 @@ private void StartAimBoostLoop()
         {
             BoostActiveGameRealtime();
 
-            if ((DateTime.Now - lastMemoryClean).TotalSeconds > 30)
-            {
-                ClearStandbyMemory();
-                lastMemoryClean = DateTime.Now;
-            }
-
             try
             {
-                await Task.Delay(100, token);
+                await Task.Delay(8, token); // 120 updates/sec
             }
             catch
             {
@@ -2927,15 +2980,12 @@ private void StartAimBoostLoop()
 }
 
 
-// ================= BOOST GAME =================
+// ================= GAME BOOST =================
 
 private void BoostActiveGameRealtime()
 {
     try
     {
-        if ((DateTime.Now - lastBoostTime).TotalMilliseconds < 500)
-            return;
-
         IntPtr hwnd = GetForegroundWindow();
 
         if (hwnd == IntPtr.Zero)
@@ -2950,22 +3000,12 @@ private void BoostActiveGameRealtime()
         if (pid == lastBoostedPID)
             return;
 
-        Process p;
+        Process p = Process.GetProcessById(pid);
 
-        try
-        {
-            p = Process.GetProcessById(pid);
-        }
-        catch
-        {
-            return;
-        }
-
-        if (!IsGameProcess(p))
+        if (!gameProcesses.Contains(p.ProcessName))
             return;
 
         lastBoostedPID = pid;
-        lastBoostTime = DateTime.Now;
 
         if (!originalPriorities.ContainsKey(pid))
             originalPriorities.TryAdd(pid, p.PriorityClass);
@@ -2974,10 +3014,7 @@ private void BoostActiveGameRealtime()
             p.PriorityClass = ProcessPriorityClass.High;
 
         BoostThreads(p);
-        BoostInputThread(hwnd);
-        SetDynamicAffinity(p);
 
-        // 🔥 ULTRA LOW LATENCY INPUT REFRESH
         ForceMouseRefresh();
     }
     catch
@@ -3003,108 +3040,7 @@ private void BoostThreads(Process p)
 }
 
 
-// ================= CPU AFFINITY =================
-
-private void SetDynamicAffinity(Process p)
-{
-    try
-    {
-        int cores = Environment.ProcessorCount;
-        long mask = (1L << cores) - 1;
-        p.ProcessorAffinity = (IntPtr)mask;
-    }
-    catch { }
-}
-
-
-// ================= GAME DETECTION =================
-
-private bool IsGameProcess(Process p)
-{
-    try
-    {
-        if (p.MainWindowHandle == IntPtr.Zero)
-            return false;
-
-        if (!p.Responding)
-            return false;
-
-        if (p.WorkingSet64 < 200_000_000)
-            return false;
-
-        string name = p.ProcessName.ToLower();
-
-        if (name.Contains("explorer") ||
-            name.Contains("svchost") ||
-            name.Contains("search"))
-            return false;
-
-        return true;
-    }
-    catch
-    {
-        return false;
-    }
-}
-
-
-// ================= INPUT BOOST =================
-
-private void BoostInputThread(IntPtr hwnd)
-{
-    try
-    {
-        uint foreThread = GetWindowThreadProcessId(hwnd, out _);
-        uint appThread = GetCurrentThreadId();
-
-        AttachThreadInput(appThread, foreThread, true);
-        AttachThreadInput(appThread, foreThread, false);
-    }
-    catch { }
-}
-
-
-// ================= ULTRA LOW LATENCY MOUSE REFRESH =================
-
-private void ForceMouseRefresh()
-{
-    try
-    {
-        Point pos = Cursor.Position;
-
-        Cursor.Position = new Point(pos.X + 1, pos.Y);
-        Cursor.Position = pos;
-    }
-    catch { }
-}
-
-
-// ================= MEMORY CLEANER =================
-
-[DllImport("ntdll.dll")]
-private static extern uint NtSetSystemInformation(
-    int SystemInformationClass,
-    IntPtr SystemInformation,
-    int SystemInformationLength);
-
-private void ClearStandbyMemory()
-{
-    try
-    {
-        int MemoryPurgeStandbyList = 4;
-
-        IntPtr memInfo = Marshal.AllocHGlobal(sizeof(int));
-        Marshal.WriteInt32(memInfo, MemoryPurgeStandbyList);
-
-        NtSetSystemInformation(80, memInfo, sizeof(int));
-
-        Marshal.FreeHGlobal(memInfo);
-    }
-    catch { }
-}
-
-
-// ================= MOUSE SETTINGS =================
+// ================= DISABLE MOUSE ACCEL =================
 
 private void DisableMouseAccelerationInstant()
 {
@@ -3113,14 +3049,17 @@ private void DisableMouseAccelerationInstant()
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", "0");
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", "0");
         Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", "0");
+        Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", "10");
 
-        int[] mouseParams = { 0, 0, 0 };
+        int[] mouseParams = new int[] { 0, 0, 0 };
 
         SystemParametersInfo(
             SPI_SETMOUSE,
             0,
             mouseParams,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+        ForceMouseRefresh();
     }
     catch { }
 }
@@ -3132,19 +3071,38 @@ private void RestoreMouseDefaultsInstant()
 {
     try
     {
-        int[] mouseParams = { 6, 10, 1 };
+        if (originalMouseSpeed != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", originalMouseSpeed);
+
+        if (originalThreshold1 != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", originalThreshold1);
+
+        if (originalThreshold2 != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", originalThreshold2);
+
+        if (originalSensitivity != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", originalSensitivity);
+
+        int[] mouseParams =
+        {
+            int.Parse(originalThreshold1 ?? "6"),
+            int.Parse(originalThreshold2 ?? "10"),
+            int.Parse(originalMouseSpeed ?? "1")
+        };
 
         SystemParametersInfo(
             SPI_SETMOUSE,
             0,
             mouseParams,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+        ForceMouseRefresh();
     }
     catch { }
 }
 
 
-// ================= RESTORE PRIORITY =================
+// ================= RESTORE PRIORITIES =================
 
 private void RestorePriorities()
 {
@@ -3158,6 +3116,21 @@ private void RestorePriorities()
     }
 
     originalPriorities.Clear();
+}
+
+
+// ================= INPUT REFRESH =================
+
+private void ForceMouseRefresh()
+{
+    try
+    {
+        Point pos = Cursor.Position;
+
+        Cursor.Position = new Point(pos.X + 1, pos.Y);
+        Cursor.Position = pos;
+    }
+    catch { }
 }
     }
 }
