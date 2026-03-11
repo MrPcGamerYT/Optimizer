@@ -2809,107 +2809,136 @@ namespace Optimizer
 
         // ================= AIM OPTIMIZER STATE =================
 
-private CancellationTokenSource aimBoostCTS = null;
+        private CancellationTokenSource aimBoostCTS = null;
+        private bool aimOptimizerActive = false;
+        private bool timerResolutionActive = false;
 
-private bool aimOptimizerActive = false;
-private bool timerResolutionActive = false;
+        private int lastBoostedPID = -1;
 
-private int lastBoostedPID = -1;
+        // Faster timing control
+        private DateTime lastBoostTime = DateTime.MinValue;
 
-private DateTime lastBoostTime = DateTime.MinValue;
-
-private readonly object aimLock = new object();
-
+        // Safety lock
+        private readonly object aimLock = new object();
 
 
-// ================= AIM TOGGLE =================
+        // ================= AIM TOGGLE =================
 
-private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
-{
-    try
-    {
-        Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
-        Properties.Settings.Default.Save();
-
-        if (tgAimOptimize.Checked)
+        private void tgAimOptimize_CheckedChanged(object sender, EventArgs e)
         {
-            EnableProAimOptimization();
-            SetAdminStatus("Aim Optimization ENABLED 🎯", Color.Lime);
-        }
-        else
-        {
-            DisableProAimOptimization();
-            SetAdminStatus("Aim Optimization DISABLED ❌", Color.Orange);
-        }
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show("Aim Optimization Error:\n" + ex.Message);
-    }
-}
+            try
+            {
+                Properties.Settings.Default.AimOptimize = tgAimOptimize.Checked;
+                Properties.Settings.Default.Save();
 
-
-
-// ================= ENABLE =================
-
-private void EnableProAimOptimization()
-{
-    lock (aimLock)
-    {
-        if (aimOptimizerActive)
-            return;
-
-        aimOptimizerActive = true;
-
-        SaveOriginalMouseSettings();
-
-        DisableMouseAccelerationInstant();
-
-        if (!timerResolutionActive)
-        {
-            timeBeginPeriod(1);
-            timerResolutionActive = true;
+                if (tgAimOptimize.Checked)
+                {
+                    EnableProAimOptimization();
+                    SetAdminStatus("Aim Optimization ENABLED 🎯", Color.Lime);
+                }
+                else
+                {
+                    DisableProAimOptimization();
+                    SetAdminStatus("Aim Optimization DISABLED ❌", Color.Orange);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Aim Optimization Error:\n" + ex.Message);
+            }
         }
 
-        StartAimBoostLoop();
-    }
-}
 
+        // ================= ENABLE =================
 
-
-// ================= DISABLE =================
-
-private void DisableProAimOptimization()
-{
-    lock (aimLock)
-    {
-        aimOptimizerActive = false;
-
-        try
+        private void EnableProAimOptimization()
         {
-            aimBoostCTS?.Cancel();
-            aimBoostCTS?.Dispose();
-            aimBoostCTS = null;
-        }
-        catch { }
+            lock (restoreLock)
+            {
+                if (aimOptimizerActive)
+                    return;
 
-        RestorePriorities();
+                aimOptimizerActive = true;
 
-        RestoreMouseDefaultsInstant();
+                SaveOriginalMouseSettings();   // 🔥 IMPORTANT
 
-        if (timerResolutionActive)
-        {
-            timeEndPeriod(1);
-            timerResolutionActive = false;
+                DisableMouseAccelerationInstant();
+
+                if (!timerResolutionActive)
+                {
+                    timeBeginPeriod(1);
+                    timerResolutionActive = true;
+                }
+
+                StartAimBoostLoop();
+            }
         }
 
-        lastBoostedPID = -1;
-    }
-}
+        //==============Save original mouse settings to restore later (important for user experience)================
+
+        private void SaveOriginalMouseSettings()
+        {
+            try
+            {
+                originalMouseSpeed =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseSpeed",
+                        "1")?.ToString();
+
+                originalThreshold1 =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseThreshold1",
+                        "6")?.ToString();
+
+                originalThreshold2 =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseThreshold2",
+                        "10")?.ToString();
+
+                originalSensitivity =
+                    Registry.GetValue(
+                        @"HKEY_CURRENT_USER\Control Panel\Mouse",
+                        "MouseSensitivity",
+                        "10")?.ToString();
+            }
+            catch { }
+        }
 
 
+        // ================= DISABLE =================
 
-// ================= BOOST LOOP =================
+        private void DisableProAimOptimization()
+        {
+            lock (restoreLock)
+            {
+                aimOptimizerActive = false;
+
+                try
+                {
+                    aimBoostCTS?.Cancel();
+                    aimBoostCTS?.Dispose();
+                    aimBoostCTS = null;
+                }
+                catch { }
+
+                RestorePriorities();
+                RestoreMouseDefaultsInstant();
+
+                if (timerResolutionActive)
+                {
+                    timeEndPeriod(1);
+                    timerResolutionActive = false;
+                }
+
+                lastBoostedPID = -1;
+            }
+        }
+
+
+        // ================= REALTIME LOOP =================
 
 private void StartAimBoostLoop()
 {
@@ -2917,7 +2946,6 @@ private void StartAimBoostLoop()
         return;
 
     aimBoostCTS = new CancellationTokenSource();
-
     var token = aimBoostCTS.Token;
 
     Task.Run(async () =>
@@ -2927,7 +2955,6 @@ private void StartAimBoostLoop()
             try
             {
                 BoostActiveGameRealtime();
-
                 await Task.Delay(6, token); // ~160 updates/sec
             }
             catch
@@ -2940,8 +2967,7 @@ private void StartAimBoostLoop()
 }
 
 
-
-// ================= REALTIME BOOST =================
+        // ================= REALTIME BOOST =================
 
 private void BoostActiveGameRealtime()
 {
@@ -2956,7 +2982,6 @@ private void BoostActiveGameRealtime()
             return;
 
         int pid;
-
         GetWindowThreadProcessId(hwnd, out pid);
 
         if (pid <= 0)
@@ -3000,9 +3025,7 @@ private void BoostActiveGameRealtime()
     }
 }
 
-
-
-// ================= THREAD BOOST =================
+        // ================= THREAD BOOST =================
 
 private void BoostThreads(Process p)
 {
@@ -3017,9 +3040,7 @@ private void BoostThreads(Process p)
     catch { }
 }
 
-
-
-// ================= CPU AFFINITY BOOST =================
+// ================= CPU AFFINITY =================
 
 private void SetDynamicAffinity(Process p)
 {
@@ -3037,11 +3058,87 @@ private void SetDynamicAffinity(Process p)
     catch { }
 }
 
+        // ================= MOUSE DISABLE ACCEL =================
+
+        private void DisableMouseAccelerationInstant()
+        {
+            try
+            {
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSpeed", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold1", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseThreshold2", "0");
+                Registry.SetValue(@"HKEY_CURRENT_USER\\Control Panel\\Mouse", "MouseSensitivity", "10");
+
+                int[] mouseParams = new int[] { 0, 0, 0 };
+
+                SystemParametersInfo(
+                    SPI_SETMOUSE,
+                    0,
+                    mouseParams,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+                ForceMouseRefresh();
+            }
+            catch { }
+        }
 
 
-// ================= MOUSE REFRESH =================
+        // ================= RESTORE =================
 
-private void ForceMouseRefresh()
+        private void RestoreMouseDefaultsInstant()
+{
+    try
+    {
+        if (originalMouseSpeed != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSpeed", originalMouseSpeed);
+
+        if (originalThreshold1 != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold1", originalThreshold1);
+
+        if (originalThreshold2 != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseThreshold2", originalThreshold2);
+
+        if (originalSensitivity != null)
+            Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Mouse", "MouseSensitivity", originalSensitivity);
+
+        int t1 = int.TryParse(originalThreshold1, out var v1) ? v1 : 6;
+        int t2 = int.TryParse(originalThreshold2, out var v2) ? v2 : 10;
+        int sp = int.TryParse(originalMouseSpeed, out var v3) ? v3 : 1;
+
+        int[] mouseParams = { t1, t2, sp };
+
+        SystemParametersInfo(
+            SPI_SETMOUSE,
+            0,
+            mouseParams,
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+        ForceMouseRefresh();
+    }
+    catch { }
+}
+
+
+        // ================= RESTORE PRIORITY =================
+
+        private void RestorePriorities()
+        {
+            foreach (var entry in originalPriorities)
+            {
+                try
+                {
+                    Process.GetProcessById(entry.Key).PriorityClass = entry.Value;
+                }
+                catch { }
+            }
+
+            originalPriorities.Clear();
+        }
+
+
+        // ================= FORCE REFRESH =================
+
+        private void ForceMouseRefresh()
 {
     try
     {
