@@ -2812,7 +2812,14 @@ namespace Optimizer
         private CancellationTokenSource aimBoostCTS = null;
         private bool aimOptimizerActive = false;
         private bool timerResolutionActive = false;
+
         private int lastBoostedPID = -1;
+
+        // Faster timing control
+        private DateTime lastBoostTime = DateTime.MinValue;
+
+        // Safety lock
+        private readonly object aimLock = new object();
 
 
         // ================= AIM TOGGLE =================
@@ -2931,54 +2938,44 @@ namespace Optimizer
         }
 
 
-        // ================= SAFE CLOSE SUPPORT =================
+        // ================= REALTIME LOOP =================
 
-        // Call this in your FormClosing event OR Guna2 close button event
-        private void SafeStopAimOptimizer()
+private void StartAimBoostLoop()
+{
+    if (aimBoostCTS != null)
+        return;
+
+    aimBoostCTS = new CancellationTokenSource();
+    var token = aimBoostCTS.Token;
+
+    Task.Run(async () =>
+    {
+        while (!token.IsCancellationRequested && aimOptimizerActive)
         {
             try
             {
-                DisableProAimOptimization();
+                BoostActiveGameRealtime();
+                await Task.Delay(6, token); // ~160 updates/sec
             }
-            catch { }
-        }
-
-
-        // ================= REALTIME LOOP =================
-
-        private void StartAimBoostLoop()
-        {
-            if (aimBoostCTS != null)
-                return;
-
-            aimBoostCTS = new CancellationTokenSource();
-            var token = aimBoostCTS.Token;
-
-            Task.Run(async () =>
+            catch
             {
-                while (!token.IsCancellationRequested && aimOptimizerActive)
-                {
-                    BoostActiveGameRealtime();
-
-                    try
-                    {
-                        await Task.Delay(10, token); // 125 updates/sec (NEXT LEVEL)
-                    }
-                    catch
-                    {
-                        break;
-                    }
-                }
-            }, token);
+                break;
+            }
         }
+
+    }, token);
+}
 
 
         // ================= REALTIME BOOST =================
 
-        private void BoostActiveGameRealtime()
+private void BoostActiveGameRealtime()
 {
     try
     {
+        if ((DateTime.Now - lastBoostTime).TotalMilliseconds < 300)
+            return;
+
         IntPtr hwnd = GetForegroundWindow();
 
         if (hwnd == IntPtr.Zero)
@@ -3001,7 +2998,6 @@ namespace Optimizer
         }
         catch
         {
-            lastBoostedPID = -1;
             return;
         }
 
@@ -3009,6 +3005,7 @@ namespace Optimizer
             return;
 
         lastBoostedPID = pid;
+        lastBoostTime = DateTime.Now;
 
         if (!originalPriorities.ContainsKey(pid))
             originalPriorities.TryAdd(pid, p.PriorityClass);
@@ -3016,16 +3013,9 @@ namespace Optimizer
         if (p.PriorityClass != ProcessPriorityClass.High)
             p.PriorityClass = ProcessPriorityClass.High;
 
-        // Thread priority boost (used by real optimizers)
-        try
-        {
-            foreach (ProcessThread thread in p.Threads)
-            {
-                if (thread.PriorityLevel < ThreadPriorityLevel.AboveNormal)
-                    thread.PriorityLevel = ThreadPriorityLevel.AboveNormal;
-            }
-        }
-        catch { }
+        BoostThreads(p);
+
+        SetDynamicAffinity(p);
 
         ForceMouseRefresh();
     }
@@ -3035,6 +3025,38 @@ namespace Optimizer
     }
 }
 
+        // ================= THREAD BOOST =================
+
+private void BoostThreads(Process p)
+{
+    try
+    {
+        foreach (ProcessThread thread in p.Threads)
+        {
+            if (thread.PriorityLevel < ThreadPriorityLevel.AboveNormal)
+                thread.PriorityLevel = ThreadPriorityLevel.AboveNormal;
+        }
+    }
+    catch { }
+}
+
+// ================= CPU AFFINITY =================
+
+private void SetDynamicAffinity(Process p)
+{
+    try
+    {
+        int cores = Environment.ProcessorCount;
+
+        if (cores <= 2)
+            return;
+
+        long mask = (1L << cores) - 1;
+
+        p.ProcessorAffinity = (IntPtr)mask;
+    }
+    catch { }
+}
 
         // ================= MOUSE DISABLE ACCEL =================
 
@@ -3117,16 +3139,17 @@ namespace Optimizer
         // ================= FORCE REFRESH =================
 
         private void ForceMouseRefresh()
-        {
-            try
-            {
-                Point pos = Cursor.Position;
+{
+    try
+    {
+        Point pos = Cursor.Position;
 
-                Cursor.Position = new Point(pos.X + 1, pos.Y);
-                Cursor.Position = pos;
-            }
-            catch { }
-        }
+        Cursor.Position = new Point(pos.X + 1, pos.Y);
+        Cursor.Position = new Point(pos.X - 1, pos.Y);
+        Cursor.Position = pos;
+    }
+    catch { }
+}
 
     }
 }
