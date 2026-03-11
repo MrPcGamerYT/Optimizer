@@ -2955,7 +2955,7 @@ private void StartAimBoostLoop()
             try
             {
                 BoostActiveGameRealtime();
-                await Task.Delay(6, token); // ~160 updates/sec
+                await Task.Delay(8, token); // ~160 updates/sec
             }
             catch
             {
@@ -2973,15 +2973,13 @@ private void BoostActiveGameRealtime()
 {
     try
     {
-        if ((DateTime.Now - lastBoostTime).TotalMilliseconds < 300)
-            return;
-
         IntPtr hwnd = GetForegroundWindow();
 
         if (hwnd == IntPtr.Zero)
             return;
 
         int pid;
+
         GetWindowThreadProcessId(hwnd, out pid);
 
         if (pid <= 0)
@@ -3005,7 +3003,6 @@ private void BoostActiveGameRealtime()
             return;
 
         lastBoostedPID = pid;
-        lastBoostTime = DateTime.Now;
 
         if (!originalPriorities.ContainsKey(pid))
             originalPriorities.TryAdd(pid, p.PriorityClass);
@@ -3013,10 +3010,10 @@ private void BoostActiveGameRealtime()
         if (p.PriorityClass != ProcessPriorityClass.High)
             p.PriorityClass = ProcessPriorityClass.High;
 
-        BoostThreads(p);
+        BoostThreadsSafe(p);
+        SetDynamicAffinitySafe(p);
 
-        SetDynamicAffinity(p);
-
+        // refresh mouse only when new game boosted
         ForceMouseRefresh();
     }
     catch
@@ -3027,14 +3024,18 @@ private void BoostActiveGameRealtime()
 
         // ================= THREAD BOOST =================
 
-private void BoostThreads(Process p)
+private void BoostThreadsSafe(Process p)
 {
     try
     {
-        foreach (ProcessThread thread in p.Threads)
+        foreach (ProcessThread t in p.Threads)
         {
-            if (thread.PriorityLevel < ThreadPriorityLevel.AboveNormal)
-                thread.PriorityLevel = ThreadPriorityLevel.AboveNormal;
+            try
+            {
+                if (t.PriorityLevel < ThreadPriorityLevel.AboveNormal)
+                    t.PriorityLevel = ThreadPriorityLevel.AboveNormal;
+            }
+            catch { }
         }
     }
     catch { }
@@ -3042,7 +3043,7 @@ private void BoostThreads(Process p)
 
 // ================= CPU AFFINITY =================
 
-private void SetDynamicAffinity(Process p)
+private void SetDynamicAffinitySafe(Process p)
 {
     try
     {
@@ -3053,7 +3054,8 @@ private void SetDynamicAffinity(Process p)
 
         long mask = (1L << cores) - 1;
 
-        p.ProcessorAffinity = (IntPtr)mask;
+        if (p.ProcessorAffinity != (IntPtr)mask)
+            p.ProcessorAffinity = (IntPtr)mask;
     }
     catch { }
 }
